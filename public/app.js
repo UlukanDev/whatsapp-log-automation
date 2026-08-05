@@ -73,15 +73,17 @@ function updatePreview() {
 
   let previewText = '';
   if (type === 'BUY') {
-    previewText = `🔒 BUY: ${amount}bgl\n💥 PRICE: ${price}tl\n👤 TRADER: ${trader}`;
+    previewText = `🔒 BUY: ${amount}bgl\n💥 PRICE: ${price}tl`;
     if (info) {
       previewText += `\nℹ️ INFO: ${info}`;
     }
+    previewText += `\n👤 ADMİN: ${trader}`;
   } else {
-    previewText = `🔒 SOLD: ${amount}bgl\n💸 PROFİT: ${profit}tl\n👤 TRADER: ${trader}`;
+    previewText = `🔒 SOLD: ${amount}bgl\n💸 PROFİT: ${profit}tl`;
     if (info) {
       previewText += `\nℹ️ INFO: ${info}`;
     }
+    previewText += `\n👤 ADMİN: ${trader}`;
   }
 
   previewEl.textContent = previewText;

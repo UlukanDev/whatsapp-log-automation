@@ -231,19 +231,21 @@ client.initialize().catch(err => {
 function formatTradeLogMessage({ type, amount, price, profit, info, trader }) {
   const isBuy = String(type || 'BUY').toUpperCase() === 'BUY';
   const infoText = (info && String(info).trim()) ? String(info).trim() : '';
-  const traderText = (trader && String(trader).trim()) ? String(trader).trim() : 'Ebubekir';
+  const adminText = (trader && String(trader).trim()) ? String(trader).trim() : 'Ulukan';
 
   if (isBuy) {
-    let msg = `🔒 BUY: ${amount || 0}bgl\n💥 PRICE: ${price || 0}tl\n👤 TRADER: ${traderText}`;
+    let msg = `🔒 BUY: ${amount || 0}bgl\n💥 PRICE: ${price || 0}tl`;
     if (infoText) {
       msg += `\nℹ️ INFO: ${infoText}`;
     }
+    msg += `\n👤 ADMİN: ${adminText}`;
     return msg;
   } else {
-    let msg = `🔒 SOLD: ${amount || 0}bgl\n💸 PROFİT: ${profit || 0}tl\n👤 TRADER: ${traderText}`;
+    let msg = `🔒 SOLD: ${amount || 0}bgl\n💸 PROFİT: ${profit || 0}tl`;
     if (infoText) {
       msg += `\nℹ️ INFO: ${infoText}`;
     }
+    msg += `\n👤 ADMİN: ${adminText}`;
     return msg;
   }
 }
