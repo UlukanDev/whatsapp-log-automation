@@ -77,8 +77,10 @@ function updatePreview() {
   previewEl.textContent = generateFormattedMessage();
 }
 
-// Handle Form Submission (WhatsApp Scheme Redirection)
-function handleSendLog(e) {
+const TARGET_GROUP_URL = 'https://chat.whatsapp.com/DTRkY19iZklEk5ZtQv2DSH?s=cl&p=a&ilr=1';
+
+// Handle Form Submission (WhatsApp Target Group & Scheme Redirection)
+async function handleSendLog(e) {
   e.preventDefault();
 
   const type = document.getElementById('trade-type').value;
@@ -91,8 +93,16 @@ function handleSendLog(e) {
   const formattedText = generateFormattedMessage();
   const encodedText = encodeURIComponent(formattedText);
 
-  // WhatsApp Deep Link / Scheme URL
-  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
+  // Try copying formatted message to clipboard automatically
+  let copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(formattedText);
+      copied = true;
+    }
+  } catch (err) {
+    console.warn('Clipboard copy failed:', err);
+  }
 
   // Save entry to local history
   const logEntry = {
@@ -110,10 +120,29 @@ function handleSendLog(e) {
 
   saveLogEntry(logEntry);
 
-  showAlert('alert-success', `<i class="fa-solid fa-circle-check"></i> Ticaret logu hazırlandı! WhatsApp açılıyor...`);
+  const sendSchemeUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
 
-  // Trigger WhatsApp Deep Link
-  window.open(whatsappUrl, '_blank');
+  if (copied) {
+    showAlert('alert-success', `
+      <i class="fa-solid fa-circle-check"></i> <strong>Log mesajı kopyalandı ve Hedef WhatsApp Grubu açılıyor!</strong><br>
+      Açılan sohbet kutusuna yapıştırıp (Paste) mesajı anında gönderebilirsiniz.
+      <div style="margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <a href="${TARGET_GROUP_URL}" target="_blank" class="btn-chip chip-success"><i class="fa-solid fa-users"></i> Hedef Grubu Aç</a>
+        <a href="${sendSchemeUrl}" target="_blank" class="btn-chip chip-warning"><i class="fa-solid fa-share"></i> Veya Sohbet Seçerek Gönder</a>
+      </div>
+    `);
+  } else {
+    showAlert('alert-success', `
+      <i class="fa-solid fa-circle-check"></i> <strong>Hedef WhatsApp Grubu açılıyor...</strong>
+      <div style="margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <a href="${TARGET_GROUP_URL}" target="_blank" class="btn-chip chip-success"><i class="fa-solid fa-users"></i> Hedef Grubu Aç</a>
+        <a href="${sendSchemeUrl}" target="_blank" class="btn-chip chip-warning"><i class="fa-solid fa-share"></i> Metin ile Gönder</a>
+      </div>
+    `);
+  }
+
+  // Direct redirection to Target Group URL
+  window.open(TARGET_GROUP_URL, '_blank');
 }
 
 // Show alert message in form
