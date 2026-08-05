@@ -73,6 +73,19 @@
             <i class="fa-solid fa-circle-info"></i>
             <span>Log bildirimi göndermek için WhatsApp Web oturumunuzun aktif kalması gerekmektedir.</span>
           </div>
+
+          <!-- WhatsApp Groups Card -->
+          <div class="groups-section">
+            <div class="groups-header">
+              <h3><i class="fa-solid fa-users"></i> Bağlı WhatsApp Grupları</h3>
+              <button class="btn-icon btn-sm" onclick="fetchGroups()" title="Grupları Yenile">
+                <i class="fa-solid fa-arrows-rotate"></i>
+              </button>
+            </div>
+            <div id="groups-list" class="groups-list">
+              <p class="text-muted text-center" style="font-size: 0.8rem;">Oturum açıldığında gruplar burada listelenir.</p>
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -92,9 +105,9 @@
           <form id="log-form" onsubmit="handleSendLog(event)">
             <div class="form-row">
               <div class="form-group flex-1">
-                <label for="phone"><i class="fa-solid fa-mobile-screen-button"></i> Alıcı Telefon Numarası</label>
-                <input type="text" id="phone" placeholder="Örn: 905XXXXXXXXX veya 05XXXXXXXXX" required>
-                <span class="field-hint">Ülke kodu ile veya 05xx şeklinde giriniz</span>
+                <label for="phone"><i class="fa-solid fa-mobile-screen-button"></i> Alıcı (Numara veya Grup ID)</label>
+                <input type="text" id="phone" placeholder="Örn: 905XXXXXXXXX veya 120363041234567890@g.us" required>
+                <span class="field-hint">Telefon Numarası veya WhatsApp Grup ID girin</span>
               </div>
 
               <div class="form-group flex-1">

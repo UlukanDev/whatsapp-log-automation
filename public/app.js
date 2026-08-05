@@ -70,6 +70,8 @@ function updateStatusUI(data) {
         document.getElementById('device-name').textContent = clientInfo.pushname || 'Bağlı Kullanıcı';
         document.getElementById('device-phone').textContent = clientInfo.wid ? `+${clientInfo.wid}` : 'Oturum Aktif';
       }
+      // Fetch WhatsApp Groups
+      fetchGroups();
       break;
 
     case 'DISCONNECTED':
@@ -305,6 +307,50 @@ function renderLogsTable(logs) {
       </tr>
     `;
   }).join('');
+}
+
+// Fetch WhatsApp Groups list
+async function fetchGroups() {
+  const groupsList = document.getElementById('groups-list');
+  if (!groupsList) return;
+
+  try {
+    const res = await fetch('/api/groups');
+    const data = await res.json();
+
+    if (data.success) {
+      if (data.groups.length === 0) {
+        groupsList.innerHTML = '<p class="text-muted text-center" style="font-size: 0.8rem;">Dahil olunan WhatsApp grubu bulunamadı.</p>';
+        return;
+      }
+
+      groupsList.innerHTML = data.groups.map(group => `
+        <div class="group-item">
+          <div class="group-info">
+            <span class="group-name">📢 ${escapeHtml(group.name)}</span>
+            <span class="group-id">${escapeHtml(group.id)}</span>
+          </div>
+          <button type="button" class="btn-chip chip-success" onclick="selectGroup('${escapeHtml(group.id)}')" title="Forma Aktar">
+            <i class="fa-solid fa-check"></i> Seç
+          </button>
+        </div>
+      `).join('');
+    } else {
+      groupsList.innerHTML = `<p class="text-muted text-center" style="font-size: 0.8rem; color: var(--error-color);">${escapeHtml(data.error)}</p>`;
+    }
+  } catch (error) {
+    console.error('Fetch groups error:', error);
+  }
+}
+
+// Select group ID and insert into form target input
+function selectGroup(groupId) {
+  const phoneInput = document.getElementById('phone');
+  if (phoneInput) {
+    phoneInput.value = groupId;
+    phoneInput.focus();
+    showAlert('alert-success', `<i class="fa-solid fa-circle-check"></i> Grup ID formdaki Alıcı alanına aktarıldı: <code>${escapeHtml(groupId)}</code>`);
+  }
 }
 
 // Utility: HTML escaper

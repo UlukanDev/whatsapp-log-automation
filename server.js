@@ -51,7 +51,7 @@ client.on('qr', (qr) => {
 });
 
 // Event: Client Ready
-client.on('ready', () => {
+client.on('ready', async () => {
   clientStatus = 'CONNECTED';
   currentQr = null;
   clientInfo = client.info ? {
@@ -61,6 +61,27 @@ client.on('ready', () => {
   } : { pushname: 'WhatsApp User' };
 
   console.log('🟢 [WhatsApp Bot] Başarıyla bağlandı! Hazır.');
+
+  // Sohbetleri ve grupları tara
+  try {
+    const chats = await client.getChats();
+    const groups = chats.filter(chat => chat.isGroup);
+
+    console.log('\n========================================');
+    console.log(' 👥 [WhatsApp Grupları Taranıyor...]');
+    if (groups.length === 0) {
+      console.log(' ⚠️ Hesabınıza ait bağlı WhatsApp grubu bulunamadı.');
+    } else {
+      console.log(` 📌 Toplam ${groups.length} WhatsApp Grubu Bulundu:\n`);
+      groups.forEach((g, index) => {
+        console.log(`   ${index + 1}. 📢 Grup İsmi : \x1b[36m"${g.name}"\x1b[0m`);
+        console.log(`      🔑 Grup ID   : \x1b[32m${g.id._serialized}\x1b[0m\n`);
+      });
+    }
+    console.log('========================================\n');
+  } catch (err) {
+    console.error('⚠️ [Gruplar Taranırken Hata]:', err.message);
+  }
 });
 
 // Event: Authentication failure
@@ -87,19 +108,20 @@ client.initialize().catch(err => {
   console.error('WhatsApp Client Başlatma Hatası:', err);
 });
 
-// Helper: Format phone number to WhatsApp format (e.g., 905xxxxxxxxx -> 905xxxxxxxxx@c.us)
+// Helper: Format phone number or group ID to WhatsApp format
 function formatWhatsAppNumber(phone) {
-  let cleaned = phone.replace(/\D/g, ''); // Remove non-digits
-  if (!cleaned.endsWith('@c.us')) {
-    // Default prefix for Turkey if started with 0 or 5 without country code
-    if (cleaned.length === 10 && cleaned.startsWith('5')) {
-      cleaned = '90' + cleaned;
-    } else if (cleaned.length === 11 && cleaned.startsWith('05')) {
-      cleaned = '90' + cleaned.substring(1);
-    }
-    cleaned = `${cleaned}@c.us`;
+  const trimmed = phone.trim();
+  // Group ID (@g.us) or direct chat ID (@c.us) check
+  if (trimmed.endsWith('@g.us') || trimmed.endsWith('@c.us')) {
+    return trimmed;
   }
-  return cleaned;
+  let cleaned = trimmed.replace(/\D/g, ''); // Remove non-digits
+  if (cleaned.length === 10 && cleaned.startsWith('5')) {
+    cleaned = '90' + cleaned;
+  } else if (cleaned.length === 11 && cleaned.startsWith('05')) {
+    cleaned = '90' + cleaned.substring(1);
+  }
+  return `${cleaned}@c.us`;
 }
 
 // Helper: Format log message for WhatsApp rich text
@@ -208,7 +230,42 @@ app.post('/api/send-log', async (req, res) => {
   }
 });
 
-// 3. Get Logs History
+// 3. Get Groups List (Group ID finder)
+app.get('/api/groups', async (req, res) => {
+  try {
+    if (clientStatus !== 'CONNECTED') {
+      return res.status(503).json({
+        success: false,
+        error: 'WhatsApp istemcisi henüz bağlı değil. Lütfen önce QR kodunu taratın.'
+      });
+    }
+
+    const chats = await client.getChats();
+    const groups = chats
+      .filter(chat => chat.isGroup)
+      .map(g => ({
+        id: g.id._serialized,
+        name: g.name,
+        unreadCount: g.unreadCount || 0,
+        timestamp: g.timestamp ? new Date(g.timestamp * 1000).toISOString() : null
+      }));
+
+    return res.json({
+      success: true,
+      total: groups.length,
+      groups
+    });
+
+  } catch (error) {
+    console.error('❌ [/api/groups Hata]:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Gruplar çekilirken bir hata oluştu.'
+    });
+  }
+});
+
+// 4. Get Logs History
 app.get('/api/logs', (req, res) => {
   res.json({
     success: true,
