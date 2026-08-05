@@ -1,28 +1,24 @@
 {
   "name": "whatsapp-log-automation",
   "version": "1.0.0",
-  "description": "WhatsApp Web JS ile Log ve Bildirim Otomasyonu Systemi",
+  "description": "WhatsApp Deep Link / Scheme ile Log ve Bildirim Otomasyonu Sistemi",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "dev": "node --watch server.js"
   },
   "keywords": [
     "whatsapp",
     "automation",
     "logger",
-    "express",
-    "bot"
+    "express"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "^1.26.0"
+    "express": "^4.19.2"
   }
 }

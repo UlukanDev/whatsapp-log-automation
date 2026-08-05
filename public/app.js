@@ -1,19 +1,10 @@
-let currentStatus = null;
-let qrcodeInstance = null;
 let allLogs = [];
 
 // DOM Loaded Initialization
 document.addEventListener('DOMContentLoaded', () => {
   initTraderSelection();
-  checkStatus();
-  fetchLogs();
+  loadLogsHistory();
   updatePreview();
-  
-  // Auto polling status every 3 seconds
-  setInterval(checkStatus, 3000);
-
-  // Manual status refresh button
-  document.getElementById('btn-refresh-status')?.addEventListener('click', checkStatus);
 });
 
 // Trader Selection & LocalStorage Persistence
@@ -56,197 +47,73 @@ function setTradeType(type) {
   updatePreview();
 }
 
-// Live Preview Update
-function updatePreview() {
+// Build formatted message string
+function generateFormattedMessage() {
   const type = document.getElementById('trade-type').value;
   const amount = document.getElementById('amount').value || '0';
   const price = document.getElementById('price').value || '0';
-  const profit = document.getElementById('profit').value || '0';
+  const profit = document.getElementById('profit')?.value || '0';
+  const trader = document.getElementById('trader-select')?.value || 'Ebubekir';
+  const info = document.getElementById('info')?.value.trim();
+
+  let message = '';
+  if (type === 'BUY') {
+    message = `🔒 BUY: ${amount}bgl\n💥 PRICE: ${price}tl\n👤 TRADER: ${trader}`;
+  } else {
+    message = `🔒 SOLD: ${amount}bgl\n💸 PROFİT: ${profit}tl\n👤 TRADER: ${trader}`;
+  }
+
+  if (info) {
+    message += `\nℹ️ INFO: ${info}`;
+  }
+
+  return message;
+}
+
+// Live Preview Update
+function updatePreview() {
+  const previewEl = document.getElementById('message-preview');
+  if (!previewEl) return;
+  previewEl.textContent = generateFormattedMessage();
+}
+
+// Handle Form Submission (WhatsApp Scheme Redirection)
+function handleSendLog(e) {
+  e.preventDefault();
+
+  const type = document.getElementById('trade-type').value;
+  const amount = document.getElementById('amount').value.trim();
+  const price = document.getElementById('price').value.trim();
+  const profit = document.getElementById('profit')?.value.trim() || '';
   const trader = document.getElementById('trader-select')?.value || 'Ebubekir';
   const info = document.getElementById('info').value.trim();
 
-  const previewEl = document.getElementById('message-preview');
-  if (!previewEl) return;
+  const formattedText = generateFormattedMessage();
+  const encodedText = encodeURIComponent(formattedText);
 
-  let previewText = '';
-  if (type === 'BUY') {
-    previewText = `🔒 BUY: ${amount}bgl\n💥 PRICE: ${price}tl\n👤 TRADER: ${trader}`;
-    if (info) {
-      previewText += `\nℹ️ INFO: ${info}`;
-    }
-  } else {
-    previewText = `🔒 SOLD: ${amount}bgl\n💸 PROFİT: ${profit}tl\n👤 TRADER: ${trader}`;
-    if (info) {
-      previewText += `\nℹ️ INFO: ${info}`;
-    }
-  }
+  // WhatsApp Deep Link / Scheme URL
+  const whatsappUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
 
-  previewEl.textContent = previewText;
-}
-
-// Check WhatsApp Client Status
-async function checkStatus() {
-  try {
-    const res = await fetch('/api/status');
-    const data = await res.json();
-    
-    currentStatus = data.status;
-    updateStatusUI(data);
-
-  } catch (error) {
-    console.error('Status fetch error:', error);
-    updateStatusBadge('DISCONNECTED', 'Sunucu Çevrimdışı');
-  }
-}
-
-// Update UI elements based on status payload
-function updateStatusUI(data) {
-  const { status, qr, clientInfo } = data;
-
-  const qrContainer = document.getElementById('qr-container');
-  const deviceInfo = document.getElementById('device-info');
-  const qrWrapper = document.getElementById('qrcode-canvas');
-  const qrSpinner = document.getElementById('qr-spinner');
-  const qrMessage = document.getElementById('qr-message');
-
-  switch (status) {
-    case 'INITIALIZING':
-      updateStatusBadge('INITIALIZING', 'WhatsApp Başlatılıyor...');
-      qrContainer.classList.remove('hidden');
-      deviceInfo.classList.add('hidden');
-      qrSpinner.classList.remove('hidden');
-      qrWrapper.innerHTML = '';
-      qrMessage.textContent = 'WhatsApp Web başlatılıyor, lütfen bekleyin...';
-      break;
-
-    case 'QR_READY':
-      updateStatusBadge('QR_READY', 'QR Kod Okutulması Bekleniyor');
-      qrContainer.classList.remove('hidden');
-      deviceInfo.classList.add('hidden');
-      qrSpinner.classList.add('hidden');
-      qrMessage.textContent = 'Lütfen WhatsApp mobil uygulamanızdan bu QR kodu taratın.';
-      
-      if (qr) {
-        renderQRCode(qr);
-      }
-      break;
-
-    case 'CONNECTED':
-      updateStatusBadge('CONNECTED', 'WhatsApp Bağlı & Hazır');
-      qrContainer.classList.add('hidden');
-      deviceInfo.classList.remove('hidden');
-      
-      if (clientInfo) {
-        document.getElementById('device-name').textContent = clientInfo.pushname || 'Bağlı Kullanıcı';
-        document.getElementById('device-phone').textContent = clientInfo.wid ? `+${clientInfo.wid}` : 'Oturum Aktif';
-      }
-      break;
-
-    case 'DISCONNECTED':
-    default:
-      updateStatusBadge('DISCONNECTED', 'Bağlantı Kesildi');
-      qrContainer.classList.remove('hidden');
-      deviceInfo.classList.add('hidden');
-      qrSpinner.classList.add('hidden');
-      qrWrapper.innerHTML = '';
-      qrMessage.textContent = 'WhatsApp bağlantısı kopuk. Yeniden bağlanılıyor...';
-      break;
-  }
-}
-
-// Render QR Code using qrcodejs
-function renderQRCode(qrString) {
-  const qrWrapper = document.getElementById('qrcode-canvas');
-  
-  if (qrWrapper.dataset.qr === qrString) return;
-  
-  qrWrapper.innerHTML = '';
-  qrWrapper.dataset.qr = qrString;
-
-  if (typeof QRCode !== 'undefined') {
-    new QRCode(qrWrapper, {
-      text: qrString,
-      width: 180,
-      height: 180,
-      colorDark: "#0b0f17",
-      colorLight: "#ffffff",
-      correctLevel: QRCode.CorrectLevel.M
-    });
-  } else {
-    qrWrapper.textContent = 'QR kütüphanesi yüklenemedi.';
-  }
-}
-
-// Update Status Badge UI
-function updateStatusBadge(type, message) {
-  const badge = document.getElementById('status-badge');
-  const text = document.getElementById('status-text');
-
-  badge.className = 'status-badge';
-  
-  switch (type) {
-    case 'INITIALIZING':
-      badge.classList.add('status-initializing');
-      break;
-    case 'QR_READY':
-      badge.classList.add('status-qr');
-      break;
-    case 'CONNECTED':
-      badge.classList.add('status-connected');
-      break;
-    case 'DISCONNECTED':
-    default:
-      badge.classList.add('status-disconnected');
-      break;
-  }
-
-  text.textContent = message;
-}
-
-// Handle Form Submission (Send Trade Log)
-async function handleSendLog(e) {
-  e.preventDefault();
-
-  const btnSubmit = document.getElementById('btn-submit');
-  const alertEl = document.getElementById('form-alert');
-
-  const payload = {
-    groupId: '120363288734876760@g.us',
-    to: '120363288734876760@g.us',
-    trader: document.getElementById('trader-select')?.value || 'Ebubekir',
-    type: document.getElementById('trade-type').value,
-    amount: document.getElementById('amount').value.trim(),
-    price: document.getElementById('price').value.trim(),
-    profit: document.getElementById('profit')?.value.trim() || '',
-    info: document.getElementById('info').value.trim()
+  // Save entry to local history
+  const logEntry = {
+    id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
+    timestamp: new Date().toISOString(),
+    trader: trader,
+    type: type,
+    amount: amount,
+    price: price,
+    profit: type === 'SOLD' ? profit : undefined,
+    info: info,
+    formattedText: formattedText,
+    status: 'REDIRECTED'
   };
 
-  btnSubmit.disabled = true;
-  btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gönderiliyor...';
-  alertEl.className = 'alert hidden';
+  saveLogEntry(logEntry);
 
-  try {
-    const res = await fetch('/api/send-log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+  showAlert('alert-success', `<i class="fa-solid fa-circle-check"></i> Ticaret logu hazırlandı! WhatsApp açılıyor...`);
 
-    const data = await res.json();
-
-    if (data.success) {
-      showAlert('alert-success', `<i class="fa-solid fa-circle-check"></i> Ticaret logu WhatsApp grubuna başarıyla gönderildi!`);
-      fetchLogs(); // refresh log table
-    } else {
-      showAlert('alert-error', `<i class="fa-solid fa-triangle-exclamation"></i> ${data.error}`);
-    }
-
-  } catch (err) {
-    showAlert('alert-error', `<i class="fa-solid fa-circle-xmark"></i> Sunucu ile iletişim kurulamadı: ${err.message}`);
-  } finally {
-    btnSubmit.disabled = false;
-    btnSubmit.innerHTML = '<i class="fa-solid fa-paper-plane"></i> WhatsApp Grubuna Gönder';
-  }
+  // Trigger WhatsApp Deep Link
+  window.open(whatsappUrl, '_blank');
 }
 
 // Show alert message in form
@@ -265,18 +132,39 @@ function resetForm() {
   document.getElementById('form-alert').className = 'alert hidden';
 }
 
-// Fetch logs history from server
-async function fetchLogs() {
+// Load logs history from LocalStorage
+function loadLogsHistory() {
   try {
-    const res = await fetch('/api/logs');
-    const data = await res.json();
-
-    if (data.success) {
-      allLogs = data.logs;
-      renderLogsTable(allLogs);
+    const stored = localStorage.getItem('bgl_logs_history');
+    if (stored) {
+      allLogs = JSON.parse(stored);
+    } else {
+      allLogs = [];
     }
-  } catch (error) {
-    console.error('Fetch logs error:', error);
+  } catch (err) {
+    allLogs = [];
+  }
+  renderLogsTable(allLogs);
+}
+
+// Save log entry to LocalStorage
+function saveLogEntry(entry) {
+  allLogs.unshift(entry);
+  if (allLogs.length > 100) allLogs.pop(); // Keep last 100 logs
+  try {
+    localStorage.setItem('bgl_logs_history', JSON.stringify(allLogs));
+  } catch (e) {
+    console.error('LocalStorage save error:', e);
+  }
+  renderLogsTable(allLogs);
+}
+
+// Clear all history from LocalStorage
+function clearLogsHistory() {
+  if (confirm('Tüm gönderim geçmişini temizlemek istediğinize emin misiniz?')) {
+    allLogs = [];
+    localStorage.removeItem('bgl_logs_history');
+    renderLogsTable(allLogs);
   }
 }
 
@@ -286,7 +174,6 @@ function filterLogs() {
   const filtered = allLogs.filter(log => 
     (log.type && log.type.toLowerCase().includes(query)) ||
     (log.trader && log.trader.toLowerCase().includes(query)) ||
-    (log.recipient && log.recipient.includes(query)) ||
     (log.formattedText && log.formattedText.toLowerCase().includes(query)) ||
     (log.info && log.info.toLowerCase().includes(query))
   );
@@ -331,7 +218,7 @@ function renderLogsTable(logs) {
           <pre class="details-preview">${escapeHtml(log.formattedText || '')}</pre>
         </td>
         <td>
-          <span class="badge badge-success"><i class="fa-solid fa-check-double"></i> Sent</span>
+          <span class="badge badge-success"><i class="fa-brands fa-whatsapp"></i> WhatsApp</span>
         </td>
       </tr>
     `;
