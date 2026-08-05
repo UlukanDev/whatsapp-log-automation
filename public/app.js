@@ -6,6 +6,7 @@ let allLogs = [];
 document.addEventListener('DOMContentLoaded', () => {
   checkStatus();
   fetchLogs();
+  updatePreview();
   
   // Auto polling status every 3 seconds
   setInterval(checkStatus, 3000);
@@ -13,6 +14,56 @@ document.addEventListener('DOMContentLoaded', () => {
   // Manual status refresh button
   document.getElementById('btn-refresh-status')?.addEventListener('click', checkStatus);
 });
+
+// Trade Type Switcher (BUY / SOLD)
+function setTradeType(type) {
+  const hiddenInput = document.getElementById('trade-type');
+  const btnBuy = document.getElementById('btn-type-buy');
+  const btnSold = document.getElementById('btn-type-sold');
+  const profitGroup = document.getElementById('profit-group');
+
+  hiddenInput.value = type;
+
+  if (type === 'BUY') {
+    btnBuy.className = 'type-btn active-buy';
+    btnSold.className = 'type-btn';
+    profitGroup.classList.add('hidden');
+    document.getElementById('profit').value = '';
+  } else {
+    btnBuy.className = 'type-btn';
+    btnSold.className = 'type-btn active-sold';
+    profitGroup.classList.remove('hidden');
+  }
+
+  updatePreview();
+}
+
+// Live Preview Update
+function updatePreview() {
+  const type = document.getElementById('trade-type').value;
+  const amount = document.getElementById('amount').value || '0';
+  const price = document.getElementById('price').value || '0';
+  const profit = document.getElementById('profit').value || '0';
+  const info = document.getElementById('info').value.trim();
+
+  const previewEl = document.getElementById('message-preview');
+  if (!previewEl) return;
+
+  let previewText = '';
+  if (type === 'BUY') {
+    previewText = `🔒 BUY: ${amount}bgl\n💥 PRICE: ${price}tl`;
+    if (info) {
+      previewText += `\nℹ️ INFO: ${info}`;
+    }
+  } else {
+    previewText = `🔒 SOLD: ${amount}bgl\n💸 PROFİT: ${profit}tl`;
+    if (info) {
+      previewText += `\nℹ️ INFO: ${info}`;
+    }
+  }
+
+  previewEl.textContent = previewText;
+}
 
 // Check WhatsApp Client Status
 async function checkStatus() {
@@ -70,7 +121,7 @@ function updateStatusUI(data) {
         document.getElementById('device-name').textContent = clientInfo.pushname || 'Bağlı Kullanıcı';
         document.getElementById('device-phone').textContent = clientInfo.wid ? `+${clientInfo.wid}` : 'Oturum Aktif';
       }
-      // Fetch WhatsApp Groups
+      // Auto fetch groups when connected
       fetchGroups();
       break;
 
@@ -90,7 +141,6 @@ function updateStatusUI(data) {
 function renderQRCode(qrString) {
   const qrWrapper = document.getElementById('qrcode-canvas');
   
-  // If QR code is already rendered with the same content, skip
   if (qrWrapper.dataset.qr === qrString) return;
   
   qrWrapper.innerHTML = '';
@@ -136,7 +186,7 @@ function updateStatusBadge(type, message) {
   text.textContent = message;
 }
 
-// Handle Form Submission (Send Log)
+// Handle Form Submission (Send Trade Log)
 async function handleSendLog(e) {
   e.preventDefault();
 
@@ -145,14 +195,13 @@ async function handleSendLog(e) {
 
   const payload = {
     phone: document.getElementById('phone').value.trim(),
-    level: document.getElementById('level').value,
-    title: document.getElementById('title').value.trim(),
-    source: document.getElementById('source').value.trim(),
-    message: document.getElementById('message').value.trim(),
-    details: document.getElementById('details').value.trim()
+    type: document.getElementById('trade-type').value,
+    amount: document.getElementById('amount').value.trim(),
+    price: document.getElementById('price').value.trim(),
+    profit: document.getElementById('profit')?.value.trim() || '',
+    info: document.getElementById('info').value.trim()
   };
 
-  // Button loading state
   btnSubmit.disabled = true;
   btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gönderiliyor...';
   alertEl.className = 'alert hidden';
@@ -167,7 +216,7 @@ async function handleSendLog(e) {
     const data = await res.json();
 
     if (data.success) {
-      showAlert('alert-success', `<i class="fa-solid fa-circle-check"></i> ${data.message}`);
+      showAlert('alert-success', `<i class="fa-solid fa-circle-check"></i> Ticaret logu WhatsApp grubuna başarıyla gönderildi!`);
       fetchLogs(); // refresh log table
     } else {
       showAlert('alert-error', `<i class="fa-solid fa-triangle-exclamation"></i> ${data.error}`);
@@ -177,7 +226,7 @@ async function handleSendLog(e) {
     showAlert('alert-error', `<i class="fa-solid fa-circle-xmark"></i> Sunucu ile iletişim kurulamadı: ${err.message}`);
   } finally {
     btnSubmit.disabled = false;
-    btnSubmit.innerHTML = '<i class="fa-solid fa-paper-plane"></i> WhatsApp İle Gönder';
+    btnSubmit.innerHTML = '<i class="fa-solid fa-paper-plane"></i> WhatsApp Grubuna Gönder';
   }
 }
 
@@ -191,46 +240,9 @@ function showAlert(typeClass, htmlContent) {
 // Reset form
 function resetForm() {
   document.getElementById('log-form').reset();
+  setTradeType('BUY');
+  updatePreview();
   document.getElementById('form-alert').className = 'alert hidden';
-}
-
-// Quick preset fill helper
-function fillTemplate(level) {
-  document.getElementById('level').value = level;
-  
-  const templates = {
-    INFO: {
-      title: 'Kullanıcı Girişi Gerçekleşti',
-      source: 'AuthService',
-      message: 'Kullanıcı hesabı sisteme başarıyla giriş yaptı.',
-      details: '{\n  "userId": "usr_7721",\n  "ip": "192.168.1.100"\n}'
-    },
-    SUCCESS: {
-      title: 'Ödeme Alma Başarılı',
-      source: 'PaymentGateway',
-      message: '₺1.250,00 tutarındaki sipariş ödemesi tamamlandı.',
-      details: '{\n  "orderId": "ORD-2026-9812",\n  "amount": 1250.00,\n  "currency": "TRY"\n}'
-    },
-    WARN: {
-      title: 'Yüksek CPU Kullanım Uyarısı',
-      source: 'SystemMonitor',
-      message: 'Sunucu CPU kullanımı 2 dakikadır %85 seviyesinin üzerinde.',
-      details: '{\n  "cpuUsage": "88.4%",\n  "activeConnections": 340\n}'
-    },
-    ERROR: {
-      title: 'Veritabanı Bağlantı Hatası',
-      source: 'DatabasePool',
-      message: 'Ana MySQL sunucusuna bağlanırken connection timeout hatası alındı.',
-      details: '{\n  "errorCode": "ETIMEDOUT",\n  "attempts": 3\n}'
-    }
-  };
-
-  if (templates[level]) {
-    document.getElementById('title').value = templates[level].title;
-    document.getElementById('source').value = templates[level].source;
-    document.getElementById('message').value = templates[level].message;
-    document.getElementById('details').value = templates[level].details;
-  }
 }
 
 // Fetch logs history from server
@@ -252,11 +264,10 @@ async function fetchLogs() {
 function filterLogs() {
   const query = document.getElementById('search-log').value.toLowerCase();
   const filtered = allLogs.filter(log => 
-    log.title.toLowerCase().includes(query) ||
-    log.message.toLowerCase().includes(query) ||
-    log.recipient.includes(query) ||
-    log.level.toLowerCase().includes(query) ||
-    (log.source && log.source.toLowerCase().includes(query))
+    (log.type && log.type.toLowerCase().includes(query)) ||
+    (log.recipient && log.recipient.includes(query)) ||
+    (log.formattedText && log.formattedText.toLowerCase().includes(query)) ||
+    (log.info && log.info.toLowerCase().includes(query))
   );
   renderLogsTable(filtered);
 }
@@ -269,37 +280,32 @@ function renderLogsTable(logs) {
     tbody.innerHTML = `
       <tr>
         <td colspan="6" class="text-center empty-state">
-          <i class="fa-regular fa-folder-open"></i> Gösterilecek log kaydı bulunamadı.
+          <i class="fa-regular fa-folder-open"></i> Henüz gönderilmiş ticaret logu bulunmuyor.
         </td>
       </tr>
     `;
     return;
   }
 
-  const levelBadgeMap = {
-    INFO: '<span class="badge badge-info"><i class="fa-solid fa-circle-info"></i> INFO</span>',
-    SUCCESS: '<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> SUCCESS</span>',
-    WARN: '<span class="badge badge-warn"><i class="fa-solid fa-triangle-exclamation"></i> WARN</span>',
-    ERROR: '<span class="badge badge-error"><i class="fa-solid fa-circle-exclamation"></i> ERROR</span>'
-  };
-
   tbody.innerHTML = logs.map(log => {
     const dateFormatted = new Date(log.timestamp).toLocaleString('tr-TR');
-    const badge = levelBadgeMap[log.level] || `<span class="badge">${log.level}</span>`;
-    const detailsHtml = log.details ? `<pre class="details-preview">${escapeHtml(log.details)}</pre>` : '<span class="text-muted">-</span>';
+    const isBuy = log.type === 'BUY';
+    const typeBadge = isBuy 
+      ? '<span class="badge badge-success"><i class="fa-solid fa-lock"></i> BUY</span>' 
+      : '<span class="badge badge-error"><i class="fa-solid fa-lock"></i> SOLD</span>';
+
+    const numbersText = isBuy 
+      ? `<strong>${escapeHtml(log.amount)} bgl</strong> / ${escapeHtml(log.price)} tl` 
+      : `<strong>${escapeHtml(log.amount)} bgl</strong> / Kâr: <span style="color: #34d399; font-weight: 600;">${escapeHtml(log.profit)} tl</span>`;
 
     return `
       <tr>
         <td style="white-space: nowrap; font-size: 0.8rem; color: var(--text-muted);">${dateFormatted}</td>
-        <td>${badge}</td>
-        <td style="font-family: var(--font-mono); font-size: 0.85rem;">+${escapeHtml(log.recipient)}</td>
+        <td>${typeBadge}</td>
+        <td style="font-family: var(--font-mono); font-size: 0.825rem;">${escapeHtml(log.recipient)}</td>
+        <td>${numbersText}</td>
         <td>
-          <strong>${escapeHtml(log.title)}</strong>
-          ${log.source ? `<br><small style="color: var(--text-muted);">📍 ${escapeHtml(log.source)}</small>` : ''}
-        </td>
-        <td>
-          <div>${escapeHtml(log.message)}</div>
-          ${detailsHtml}
+          <pre class="details-preview">${escapeHtml(log.formattedText || '')}</pre>
         </td>
         <td>
           <span class="badge badge-success"><i class="fa-solid fa-check-double"></i> Sent</span>
@@ -349,6 +355,7 @@ function selectGroup(groupId) {
   if (phoneInput) {
     phoneInput.value = groupId;
     phoneInput.focus();
+    updatePreview();
     showAlert('alert-success', `<i class="fa-solid fa-circle-check"></i> Grup ID formdaki Alıcı alanına aktarıldı: <code>${escapeHtml(groupId)}</code>`);
   }
 }

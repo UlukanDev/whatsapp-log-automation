@@ -5,6 +5,8 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
 const path = require('path');
 
+const fs = require('fs');
+
 dotenv.config();
 
 const app = express();
@@ -19,7 +21,22 @@ app.use(express.static(path.join(__dirname, 'public')));
 let clientStatus = 'INITIALIZING'; // INITIALIZING, QR_READY, CONNECTED, DISCONNECTED
 let currentQr = null;
 let clientInfo = null;
+let cachedGroups = [];
 const logsHistory = [];
+
+// Helper: Auto-detect system Chrome / Edge executable on Windows
+function getSystemChromePath() {
+  const paths = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+  ];
+  for (const p of paths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return undefined;
+}
 
 // Initialize WhatsApp Web JS Client
 const client = new Client({
@@ -28,6 +45,7 @@ const client = new Client({
   }),
   puppeteer: {
     headless: true,
+    executablePath: getSystemChromePath(),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -62,20 +80,26 @@ client.on('ready', async () => {
 
   console.log('🟢 [WhatsApp Bot] Başarıyla bağlandı! Hazır.');
 
-  // Sohbetleri ve grupları tara
+  // Sohbetleri ve grupları tara ve önbelleğe al
   try {
     const chats = await client.getChats();
     const groups = chats.filter(chat => chat.isGroup);
+    cachedGroups = groups.map(g => ({
+      id: g.id._serialized,
+      name: g.name,
+      unreadCount: g.unreadCount || 0,
+      timestamp: g.timestamp ? new Date(g.timestamp * 1000).toISOString() : null
+    }));
 
     console.log('\n========================================');
     console.log(' 👥 [WhatsApp Grupları Taranıyor...]');
-    if (groups.length === 0) {
+    if (cachedGroups.length === 0) {
       console.log(' ⚠️ Hesabınıza ait bağlı WhatsApp grubu bulunamadı.');
     } else {
-      console.log(` 📌 Toplam ${groups.length} WhatsApp Grubu Bulundu:\n`);
-      groups.forEach((g, index) => {
+      console.log(` 📌 Toplam ${cachedGroups.length} WhatsApp Grubu Bulundu:\n`);
+      cachedGroups.forEach((g, index) => {
         console.log(`   ${index + 1}. 📢 Grup İsmi : \x1b[36m"${g.name}"\x1b[0m`);
-        console.log(`      🔑 Grup ID   : \x1b[32m${g.id._serialized}\x1b[0m\n`);
+        console.log(`      🔑 Grup ID   : \x1b[32m${g.id}\x1b[0m\n`);
       });
     }
     console.log('========================================\n');
@@ -96,6 +120,7 @@ client.on('disconnected', (reason) => {
   clientStatus = 'DISCONNECTED';
   currentQr = null;
   clientInfo = null;
+  cachedGroups = [];
   console.log('🟡 [WhatsApp Bot] Bağlantı kesildi. Sebep:', reason);
   // Re-initialize after delay
   setTimeout(() => {
@@ -110,7 +135,7 @@ client.initialize().catch(err => {
 
 // Helper: Format phone number or group ID to WhatsApp format
 function formatWhatsAppNumber(phone) {
-  const trimmed = phone.trim();
+  const trimmed = String(phone).trim();
   // Group ID (@g.us) or direct chat ID (@c.us) check
   if (trimmed.endsWith('@g.us') || trimmed.endsWith('@c.us')) {
     return trimmed;
@@ -124,31 +149,24 @@ function formatWhatsAppNumber(phone) {
   return `${cleaned}@c.us`;
 }
 
-// Helper: Format log message for WhatsApp rich text
-function formatLogMessage({ level, title, source, message, details }) {
-  const levelEmojis = {
-    INFO: 'ℹ️',
-    SUCCESS: '✅',
-    WARN: '⚠️',
-    ERROR: '🚨'
-  };
+// Helper: Format BGL Trade Log message for WhatsApp
+function formatTradeLogMessage({ type, amount, price, profit, info }) {
+  const isBuy = String(type || 'BUY').toUpperCase() === 'BUY';
+  const infoText = (info && String(info).trim()) ? String(info).trim() : '';
 
-  const emoji = levelEmojis[level.toUpperCase()] || '📋';
-  const timestamp = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
-
-  let text = `${emoji} *[${level.toUpperCase()}] ${title}*\n`;
-  text += `⏱️ *Tarih:* ${timestamp}\n`;
-  if (source) {
-    text += `📍 *Kaynak:* ${source}\n`;
+  if (isBuy) {
+    let msg = `🔒 BUY: ${amount || 0}bgl\n💥 PRICE: ${price || 0}tl`;
+    if (infoText) {
+      msg += `\nℹ️ INFO: ${infoText}`;
+    }
+    return msg;
+  } else {
+    let msg = `🔒 SOLD: ${amount || 0}bgl\n💸 PROFİT: ${profit || 0}tl`;
+    if (infoText) {
+      msg += `\nℹ️ INFO: ${infoText}`;
+    }
+    return msg;
   }
-  text += `\n📝 *Mesaj:*\n${message}\n`;
-
-  if (details && details.trim()) {
-    text += `\n🔍 *Detaylar / Log Payload:*\n\`\`\`\n${details.trim()}\n\`\`\``;
-  }
-
-  text += `\n\n_🤖 WhatsApp Log Otomasyonu ile gönderildi._`;
-  return text;
 }
 
 // API Routes
@@ -163,49 +181,50 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// 2. Send Log via WhatsApp
+// 2. Send BGL Trade Log via WhatsApp
 app.post('/api/send-log', async (req, res) => {
   try {
-    const { phone, level = 'INFO', title, source, message, details } = req.body;
+    const { phone, groupId, type = 'BUY', amount, price, profit, info, message } = req.body;
 
-    const targetPhone = phone || process.env.DEFAULT_TARGET_NUMBER;
+    const targetPhone = phone || groupId || process.env.DEFAULT_TARGET_NUMBER;
 
     if (!targetPhone) {
       return res.status(400).json({
         success: false,
-        error: 'Hedef telefon numarası belirtilmedi ve .env içinde Varsayılan Numara bulunamadı.'
-      });
-    }
-
-    if (!title || !message) {
-      return res.status(400).json({
-        success: false,
-        error: 'Başlık (title) ve Mesaj (message) alanları zorunludur.'
+        error: 'Hedef grup ID veya telefon numarası girilmedi.'
       });
     }
 
     if (clientStatus !== 'CONNECTED') {
       return res.status(503).json({
         success: false,
-        error: 'WhatsApp istemcisi henüz bağlı değil. Lütfen QR kodunu okutun ve tekrar deneyin.'
+        error: 'WhatsApp istemcisi henüz bağlı değil. Lütfen önce QR kodunu okutun.'
       });
     }
 
-    const formattedNumber = formatWhatsAppNumber(targetPhone);
-    const formattedText = formatLogMessage({ level, title, source, message, details });
+    // Build trade log formatted message (or use raw message if provided)
+    let formattedText = '';
+    if (message) {
+      formattedText = message;
+    } else {
+      formattedText = formatTradeLogMessage({ type, amount, price, profit, info });
+    }
+
+    const formattedTarget = formatWhatsAppNumber(targetPhone);
 
     // Send WhatsApp message
-    const sendResult = await client.sendMessage(formattedNumber, formattedText);
+    const sendResult = await client.sendMessage(formattedTarget, formattedText);
 
     const logEntry = {
       id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
       timestamp: new Date().toISOString(),
-      recipient: formattedNumber.replace('@c.us', ''),
-      level: level.toUpperCase(),
-      title,
-      source: source || 'Sistem',
-      message,
-      details,
+      recipient: formattedTarget.replace('@c.us', '').replace('@g.us', ''),
+      type: String(type).toUpperCase(),
+      amount,
+      price,
+      profit: type === 'SOLD' ? profit : undefined,
+      info: info || '',
+      formattedText,
       status: 'SENT',
       messageId: sendResult.id._serialized
     };
@@ -213,11 +232,11 @@ app.post('/api/send-log', async (req, res) => {
     logsHistory.unshift(logEntry);
     if (logsHistory.length > 100) logsHistory.pop(); // Keep last 100 logs
 
-    console.log(`✅ [Log Sent] -> ${formattedNumber}: [${level}] ${title}`);
+    console.log(`✅ [BGL Trade Log Sent] -> ${formattedTarget}: [${type}] ${amount}bgl`);
 
     return res.json({
       success: true,
-      message: 'Log WhatsApp üzerinden başarıyla gönderildi.',
+      message: 'Ticaret logu WhatsApp üzerine başarıyla gönderildi.',
       log: logEntry
     });
 
@@ -236,31 +255,35 @@ app.get('/api/groups', async (req, res) => {
     if (clientStatus !== 'CONNECTED') {
       return res.status(503).json({
         success: false,
-        error: 'WhatsApp istemcisi henüz bağlı değil. Lütfen önce QR kodunu taratın.'
+        error: 'WhatsApp istemcisi henüz bağlı değil.'
       });
     }
 
-    const chats = await client.getChats();
-    const groups = chats
-      .filter(chat => chat.isGroup)
-      .map(g => ({
+    // Try fetching fresh groups if connected, or fallback to cachedGroups
+    try {
+      const chats = await client.getChats();
+      const groups = chats.filter(chat => chat.isGroup);
+      cachedGroups = groups.map(g => ({
         id: g.id._serialized,
         name: g.name,
         unreadCount: g.unreadCount || 0,
         timestamp: g.timestamp ? new Date(g.timestamp * 1000).toISOString() : null
       }));
+    } catch (e) {
+      console.warn('⚡ [getChats fallback to cachedGroups]:', e.message);
+    }
 
     return res.json({
       success: true,
-      total: groups.length,
-      groups
+      total: cachedGroups.length,
+      groups: cachedGroups
     });
 
   } catch (error) {
     console.error('❌ [/api/groups Hata]:', error);
     return res.status(500).json({
       success: false,
-      error: error.message || 'Gruplar çekilirken bir hata oluştu.'
+      error: error.message || 'Gruplar çekilirken hata oluştu.'
     });
   }
 });
