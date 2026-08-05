@@ -1,3 +1,5 @@
+process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || './.cache/puppeteer';
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -8,9 +10,6 @@ const path = require('path');
 const fs = require('fs');
 
 dotenv.config();
-
-// Set Puppeteer Cache Directory to local project folder
-process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || path.join(__dirname, '.cache', 'puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
