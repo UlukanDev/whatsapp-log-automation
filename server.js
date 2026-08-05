@@ -1,4 +1,5 @@
-process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || './.cache/puppeteer';
+const path = require('path');
+process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || path.resolve(__dirname, '.cache/puppeteer');
 
 const express = require('express');
 const cors = require('cors');
@@ -6,7 +7,6 @@ const dotenv = require('dotenv');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
 const puppeteer = require('puppeteer');
-const path = require('path');
 const fs = require('fs');
 
 dotenv.config();
