@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="BGL Trade System - Admin & Muhasebe Paneli">
+  <title>Admin & Muhasebe Paneli | BGL Trade System</title>
+
+  <!-- Google Fonts & Font Awesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Admin Login Modal -->
+  <div id="admin-login-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon gold-icon"><i class="fa-solid fa-user-gear"></i></div>
+        <h2>Admin Girişi</h2>
+        <p>BGL Muhasebe ve Şifre Yönetim Paneline Erişin</p>
+      </div>
+      <form id="admin-login-form" onsubmit="handleAdminLogin(event)">
+        <div class="form-group">
+          <label for="admin-master-password"><i class="fa-solid fa-key"></i> Admin Ana Şifresi</label>
+          <input type="password" id="admin-master-password" placeholder="Şifrenizi giriniz" required autocomplete="current-password">
+        </div>
+        
+        <div id="admin-login-alert" class="alert alert-error hidden"></div>
+        
+        <button type="submit" id="btn-admin-login" class="btn btn-primary full-width-btn">
+          <i class="fa-solid fa-shield-halved"></i> Panele Giriş Yap
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Password Update Modal -->
+  <div id="update-pass-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon"><i class="fa-solid fa-key"></i></div>
+        <h2>Personel Şifresi Güncelle</h2>
+        <p><strong id="modal-update-user-name">Personel</strong> için yeni şifre belirleyin</p>
+      </div>
+      <form id="update-pass-form" onsubmit="handlePasswordUpdateSubmit(event)">
+        <input type="hidden" id="update-target-user">
+        <div class="form-group">
+          <label for="new-user-password"><i class="fa-solid fa-lock"></i> Yeni Şifre</label>
+          <input type="text" id="new-user-password" placeholder="Yeni şifreyi yazınız" required>
+        </div>
+        
+        <div id="update-pass-alert" class="alert hidden"></div>
+        
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closePasswordModal()">İptal</button>
+          <button type="submit" id="btn-update-pass-submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Güncelle & Kaydet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon gold-brand">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <div>
+          <h1>BGL Muhasebe & Admin Paneli</h1>
+          <p class="subtitle">Haftalık Raporlar, Kazanç Analitiği & Şifre Yönetimi</p>
+        </div>
+      </div>
+      
+      <div class="header-controls">
+        <a href="/" class="btn btn-secondary"><i class="fa-brands fa-whatsapp"></i> Log Gönderim Sayfası</a>
+        <button class="btn btn-danger" onclick="handleAdminLogout()"><i class="fa-solid fa-right-from-bracket"></i> Çıkış</button>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="admin-tabs">
+      <button class="tab-btn active" id="tab-accounting" onclick="switchTab('accounting')">
+        <i class="fa-solid fa-chart-pie"></i> Muhasebe & Haftalık Raporlar
+      </button>
+      <button class="tab-btn" id="tab-passwords" onclick="switchTab('passwords')">
+        <i class="fa-solid fa-users-gear"></i> Personel Şifre Yönetimi
+      </button>
+    </div>
+
+    <!-- Main Content Grid -->
+    <main class="admin-content">
+      <!-- Section 1: Accounting & Analytics -->
+      <section id="section-accounting" class="tab-section active">
+        <!-- Stat Cards Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon icon-buy"><i class="fa-solid fa-cart-shopping"></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Toplam Alış (BUY)</span>
+              <h3 id="stat-buy-bgl">0 bgl</h3>
+              <p id="stat-buy-tl" class="stat-sub">0 TL harcandı</p>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon icon-sold"><i class="fa-solid fa-cash-register"></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Toplam Satış (SOLD)</span>
+              <h3 id="stat-sold-bgl">0 bgl</h3>
+              <p id="stat-sold-tl" class="stat-sub">0 TL tahsil edildi</p>
+            </div>
+          </div>
+
+          <div class="stat-card gold-card">
+            <div class="stat-icon icon-profit"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Net Elde Edilen Kâr</span>
+              <h3 id="stat-net-profit" class="text-green">+0 TL</h3>
+              <p id="stat-total-trades" class="stat-sub">0 adet toplam işlem</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin Breakdown Table -->
+        <div class="card full-width margin-top-15">
+          <div class="card-header">
+            <h2><i class="fa-solid fa-users-viewfinder"></i> Personel / Admin Bazlı Kazanç & İşlem Dağılımı</h2>
+            <button class="btn btn-secondary btn-sm" onclick="fetchAccountingData()">
+              <i class="fa-solid fa-rotate"></i> Verileri Yenile
+            </button>
+          </div>
+          <div class="card-body padding-0">
+            <div class="table-responsive">
+              <table class="log-table">
+                <thead>
+                  <tr>
+                    <th>Personel (Admin)</th>
+                    <th>Alış Adet / Hacim</th>
+                    <th>Satış Adet / Hacim</th>
+                    <th>Ürettiği Toplam Kâr (TL)</th>
+                    <th>İşlem Payı</th>
+                  </tr>
+                </thead>
+                <tbody id="accounting-tbody">
+                  <tr>
+                    <td colspan="5" class="text-center empty-state">Veriler yükleniyor...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Password Management -->
+      <section id="section-passwords" class="tab-section hidden">
+        <div class="card full-width">
+          <div class="card-header">
+            <h2><i class="fa-solid fa-key"></i> Kayıtlı Personeller ve Şifre Yönetimi</h2>
+            <span class="badge badge-info">SQLite Persistent Storage</span>
+          </div>
+          <div class="card-body padding-0">
+            <div class="table-responsive">
+              <table class="log-table">
+                <thead>
+                  <tr>
+                    <th>Personel İsmi</th>
+                    <th>Rol</th>
+                    <th>Mevcut Şifre</th>
+                    <th>Son Güncelleme</th>
+                    <th>İşlem</th>
+                  </tr>
+                </thead>
+                <tbody id="passwords-tbody">
+                  <tr>
+                    <td colspan="5" class="text-center empty-state">Personel verileri yükleniyor...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>BGL Trade System Admin & Accounting Dashboard &copy; 2026 | Safe SQLite Storage</p>
+    </footer>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="WhatsApp Server-Side Bot tabanlı Log ve Bildirim Otomasyonu Paneli">
-  <title>WhatsApp Log Otomasyonu | Admin Panel</title>
+  <title>WhatsApp Log Otomasyonu | BGL Panel</title>
 
   <!-- Google Fonts & Font Awesome Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,6 +18,42 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Personel Login Modal -->
+  <div id="login-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon"><i class="fa-solid fa-user-shield"></i></div>
+        <h2>Personel Girişi</h2>
+        <p>BGL Ticaret Sistemine Erişmek İçin Giriş Yapın</p>
+      </div>
+      <form id="login-form" onsubmit="handleLoginSubmit(event)">
+        <div class="form-group">
+          <label for="modal-personel-select"><i class="fa-solid fa-user-tag"></i> Personel Seçiniz</label>
+          <select id="modal-personel-select" required>
+            <option value="">-- Personel Seçiniz --</option>
+            <option value="Ulukan">👤 Ulukan</option>
+            <option value="Cagan">👤 Cagan</option>
+            <option value="Alper">👤 Alper</option>
+            <option value="Sefa">👤 Sefa</option>
+            <option value="Yakup">👤 Yakup</option>
+            <option value="Efe">👤 Efe</option>
+            <option value="Emir">👤 Emir</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="modal-password"><i class="fa-solid fa-key"></i> Şifreniz</label>
+          <input type="password" id="modal-password" placeholder="Şifrenizi giriniz" required autocomplete="current-password">
+        </div>
+        
+        <div id="login-alert" class="alert alert-error hidden"></div>
+        
+        <button type="submit" id="btn-login-submit" class="btn btn-primary full-width-btn">
+          <i class="fa-solid fa-right-to-bracket"></i> Oturum Aç
+        </button>
+      </form>
+    </div>
+  </div>
+
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
@@ -31,10 +67,18 @@
         </div>
       </div>
       
-      <!-- Connection Status Badge -->
-      <div id="status-badge" class="status-badge status-initializing">
-        <span class="status-dot"></span>
-        <span id="status-text">Sunucuya Bağlanılıyor...</span>
+      <!-- Connection & User Session Bar -->
+      <div class="header-controls">
+        <div id="status-badge" class="status-badge status-initializing">
+          <span class="status-dot"></span>
+          <span id="status-text">Sunucuya Bağlanılıyor...</span>
+        </div>
+
+        <div id="user-session-bar" class="user-session-bar hidden">
+          <span class="user-welcome"><i class="fa-solid fa-circle-user"></i> <strong id="logged-user-name">Giriş Yapılmadı</strong></span>
+          <a href="/admin" class="btn btn-sm btn-secondary" title="Admin Paneli"><i class="fa-solid fa-shield-halved"></i> Admin</a>
+          <button class="btn btn-sm btn-danger" onclick="handleLogout()"><i class="fa-solid fa-right-from-bracket"></i> Çıkış</button>
+        </div>
       </div>
     </header>
 
@@ -87,9 +131,9 @@
           <form id="log-form" onsubmit="handleSendLog(event)">
             <!-- 0. İşlemi Yapan Personel (Trader) -->
             <div class="form-group">
-              <label for="trader-select"><i class="fa-solid fa-user-tag"></i> İşlemi Yapan Personel (Trader)</label>
-              <select id="trader-select" onchange="handleTraderChange()">
-                <option value="">Otomatik (Boş)</option>
+              <label for="trader-select"><i class="fa-solid fa-user-tag"></i> İşlemi Yapan Personel (Admin)</label>
+              <select id="trader-select" onchange="handleTraderChange()" disabled>
+                <option value="">-- Giriş Yapınız --</option>
                 <option value="Ulukan">👤 Ulukan</option>
                 <option value="Cagan">👤 Cagan</option>
                 <option value="Alper">👤 Alper</option>

@@ -781,6 +781,277 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
   border-top: 1px solid var(--card-border);
 }
 
+/* Header Controls & User Session Bar */
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-session-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--card-border);
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-md);
+}
+
+.user-welcome {
+  font-size: 0.85rem;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.user-welcome i {
+  color: var(--primary-accent);
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.35);
+}
+
+/* Modal Overlay & Card */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(5, 8, 15, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal-card {
+  background: #0f172a;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 420px;
+  padding: 2rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  animation: modalScale 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScale {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.modal-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.modal-icon {
+  width: 54px;
+  height: 54px;
+  background: rgba(37, 211, 102, 0.15);
+  border: 1px solid rgba(37, 211, 102, 0.3);
+  color: var(--primary-accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin: 0 auto 0.75rem auto;
+}
+
+.gold-icon {
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+  color: #fbbf24 !important;
+}
+
+.gold-brand {
+  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+  color: #000 !important;
+}
+
+.modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.modal-header p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.full-width-btn {
+  width: 100%;
+  justify-content: center;
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* Admin Tabs & Stats */
+.admin-tabs {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--card-border);
+  padding-bottom: 0.75rem;
+}
+
+.tab-btn {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--text-muted);
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: var(--transition);
+}
+
+.tab-btn.active {
+  background: var(--primary-accent);
+  color: #0b0f17;
+  border-color: var(--primary-accent);
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+.tab-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+}
+
+.stat-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.gold-card {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(15, 23, 42, 0.8));
+}
+
+.stat-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+}
+
+.icon-buy {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.icon-sold {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.icon-profit {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.stat-info h3 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #f1f5f9;
+
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.stat-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.text-green { color: #34d399 !important; }
+.text-red { color: #f87171 !important; }
+
+/* Progress Bar in Accounting Table */
+.progress-bar-container {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  height: 18px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.progress-bar {
+  background: linear-gradient(90deg, #25d366, #3b82f6);
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.4s ease;
+}
+
+.progress-text {
+  position: absolute;
+  width: 100%;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+.password-toggle-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.margin-top-15 {
+  margin-top: 1.5rem;
+}
+
 /* Responsive */
 @media (max-width: 992px) {
   .dashboard-grid {
@@ -795,5 +1066,9 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
   .app-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .header-controls {
+    width: 100%;
+    justify-content: space-between;
   }
 }

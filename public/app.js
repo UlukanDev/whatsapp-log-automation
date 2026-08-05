@@ -1,9 +1,10 @@
 let currentStatus = null;
 let allLogs = [];
+let loggedUser = localStorage.getItem('logged_user') || null;
 
 // DOM Loaded Initialization
 document.addEventListener('DOMContentLoaded', () => {
-  initTraderSelection();
+  initAuthCheck();
   checkStatus();
   fetchLogs();
   updatePreview();
@@ -15,24 +16,88 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-refresh-status')?.addEventListener('click', checkStatus);
 });
 
-// Trader Selection & LocalStorage Persistence
-function initTraderSelection() {
-  const savedTrader = localStorage.getItem('trader_name');
+// Auth Check & Session Persistence
+function initAuthCheck() {
+  const loginModal = document.getElementById('login-modal');
+  const userBar = document.getElementById('user-session-bar');
+  const loggedNameEl = document.getElementById('logged-user-name');
   const traderSelect = document.getElementById('trader-select');
-  if (savedTrader && traderSelect) {
-    traderSelect.value = savedTrader;
+
+  if (loggedUser) {
+    loginModal?.classList.add('hidden');
+    userBar?.classList.remove('hidden');
+    if (loggedNameEl) loggedNameEl.textContent = loggedUser;
+    if (traderSelect) {
+      traderSelect.value = loggedUser;
+      traderSelect.disabled = true; // Lock trader input to logged user
+    }
+  } else {
+    loginModal?.classList.remove('hidden');
+    userBar?.classList.add('hidden');
+    if (traderSelect) {
+      traderSelect.value = '';
+    }
+  }
+  updatePreview();
+}
+
+// Handle Personnel Login Form Submit
+async function handleLoginSubmit(e) {
+  e.preventDefault();
+  const selectEl = document.getElementById('modal-personel-select');
+  const passEl = document.getElementById('modal-password');
+  const alertEl = document.getElementById('login-alert');
+  const btnSubmit = document.getElementById('btn-login-submit');
+
+  const name = selectEl.value;
+  const password = passEl.value;
+
+  if (!name || !password) {
+    alertEl.textContent = 'Lütfen personel seçimi yapın ve şifrenizi girin.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+
+  btnSubmit.disabled = true;
+  btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Giriş Yapılıyor...';
+  alertEl.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, password })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      loggedUser = data.user.name;
+      localStorage.setItem('logged_user', loggedUser);
+      initAuthCheck();
+      passEl.value = '';
+    } else {
+      alertEl.textContent = data.error || 'Hatalı şifre!';
+      alertEl.classList.remove('hidden');
+    }
+  } catch (err) {
+    alertEl.textContent = 'Sunucuya bağlanılamadı.';
+    alertEl.classList.remove('hidden');
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Oturum Aç';
   }
 }
 
+// Handle Personnel Logout
+function handleLogout() {
+  localStorage.removeItem('logged_user');
+  loggedUser = null;
+  initAuthCheck();
+}
+
 function handleTraderChange() {
-  const traderSelect = document.getElementById('trader-select');
-  if (traderSelect) {
-    if (traderSelect.value) {
-      traderSelect.classList.remove('input-error');
-    }
-    localStorage.setItem('trader_name', traderSelect.value);
-    updatePreview();
-  }
+  updatePreview();
 }
 
 // Trade Type Switcher (BUY / SOLD)
@@ -64,8 +129,7 @@ function updatePreview() {
   const amount = document.getElementById('amount').value || '0';
   const price = document.getElementById('price').value || '0';
   const profit = document.getElementById('profit').value || '0';
-  const traderSelect = document.getElementById('trader-select');
-  const trader = (traderSelect && traderSelect.value) ? traderSelect.value : '[Seçilmedi]';
+  const trader = loggedUser || '[Seçilmedi]';
   const info = document.getElementById('info').value.trim();
 
   const previewEl = document.getElementById('message-preview');
@@ -214,23 +278,15 @@ async function handleSendLog(e) {
 
   const btnSubmit = document.getElementById('btn-submit');
   const alertEl = document.getElementById('form-alert');
-  const traderSelect = document.getElementById('trader-select');
-  const traderValue = traderSelect?.value ? traderSelect.value.trim() : '';
 
-  // Validation: Trader must be selected
-  if (!traderValue) {
-    showAlert('alert-error', `<i class="fa-solid fa-triangle-exclamation"></i> Lütfen işlemi yapan personeli (Trader) seçiniz!`);
-    if (traderSelect) {
-      traderSelect.classList.add('input-error');
-      traderSelect.focus();
-    }
+  if (!loggedUser) {
+    showAlert('alert-error', `<i class="fa-solid fa-lock"></i> Oturumunuz kapalı. Lütfen önce giriş yapın.`);
+    initAuthCheck();
     return;
   }
 
-  traderSelect?.classList.remove('input-error');
-
   const payload = {
-    trader: traderValue,
+    trader: loggedUser,
     type: document.getElementById('trade-type').value,
     amount: document.getElementById('amount').value.trim(),
     price: document.getElementById('price').value.trim(),
@@ -276,7 +332,7 @@ function showAlert(typeClass, htmlContent) {
 // Reset form
 function resetForm() {
   document.getElementById('log-form').reset();
-  initTraderSelection();
+  initAuthCheck();
   setTradeType('BUY');
   updatePreview();
   document.getElementById('form-alert').className = 'alert hidden';
@@ -335,7 +391,7 @@ function renderLogsTable(logs) {
       ? `<strong>${escapeHtml(log.amount)} bgl</strong> / ${escapeHtml(log.price)} tl` 
       : `<strong>${escapeHtml(log.amount)} bgl</strong> / Kâr: <span style="color: #34d399; font-weight: 600;">${escapeHtml(log.profit)} tl</span>`;
 
-    const traderName = log.trader || 'Ebubekir';
+    const traderName = log.trader || 'Ulukan';
 
     return `
       <tr>

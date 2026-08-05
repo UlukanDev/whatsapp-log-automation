@@ -20,6 +20,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Serve admin page directly at /admin
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
 // WhatsApp Client State
 let clientStatus = 'INITIALIZING'; // INITIALIZING, QR_READY, CONNECTED, DISCONNECTED
 let currentQr = null;
@@ -27,13 +32,13 @@ let clientInfo = null;
 const logsHistory = [];
 const TARGET_GROUP_ID = process.env.TARGET_GROUP_ID || '120363288734876760@g.us';
 
-// Initialize SQLite Database in data/logs.db
+// Initialize SQLite Database in data/system.db
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = path.join(dataDir, 'logs.db');
+const dbPath = path.join(dataDir, 'system.db');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('❌ [SQLite Database Error]:', err.message);
@@ -42,7 +47,18 @@ const db = new sqlite3.Database(dbPath, (err) => {
   }
 });
 
-// Create logs table if not exists
+// Initial Personnel Users & Passwords
+const INITIAL_USERS = [
+  { name: 'Ulukan', password: 'ulubaba1' },
+  { name: 'Cagan', password: '2525' },
+  { name: 'Alper', password: '2040' },
+  { name: 'Sefa', password: '1090' },
+  { name: 'Yakup', password: '5060' },
+  { name: 'Efe', password: '0208' },
+  { name: 'Emir', password: '7209' }
+];
+
+// Create tables if not exist
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS logs (
@@ -59,6 +75,23 @@ db.serialize(() => {
       messageId TEXT
     )
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      name TEXT PRIMARY KEY,
+      password TEXT NOT NULL,
+      role TEXT DEFAULT 'trader',
+      updatedAt TEXT
+    )
+  `, () => {
+    // Seed initial users if table empty or missing entries
+    const stmt = db.prepare("INSERT OR IGNORE INTO users (name, password, role, updatedAt) VALUES (?, ?, 'trader', ?)");
+    const now = new Date().toISOString();
+    INITIAL_USERS.forEach(u => {
+      stmt.run(u.name, u.password, now);
+    });
+    stmt.finalize();
+  });
 });
 
 // Helper: Save log entry to SQLite
@@ -71,7 +104,7 @@ function saveLogToDb(logEntry) {
     const params = [
       logEntry.id,
       logEntry.timestamp,
-      logEntry.trader || 'Ebubekir',
+      logEntry.trader || 'Ulukan',
       logEntry.type,
       String(logEntry.amount || ''),
       String(logEntry.price || ''),
@@ -263,10 +296,53 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// 2. Send BGL Trade Log via WhatsApp
+// 2. Personel Login API
+app.post('/api/login', (req, res) => {
+  const { name, password } = req.body;
+  if (!name || !password) {
+    return res.status(400).json({ success: false, error: 'Personel ismi ve şifre zorunludur.' });
+  }
+
+  const sql = `SELECT * FROM users WHERE LOWER(name) = LOWER(?) AND password = ?`;
+  db.get(sql, [String(name).trim(), String(password).trim()], (err, user) => {
+    if (err) {
+      return res.status(500).json({ success: false, error: 'Veritabanı hatası.' });
+    }
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Hatalı şifre veya personel seçimi!' });
+    }
+    return res.json({
+      success: true,
+      message: 'Giriş başarılı!',
+      user: {
+        name: user.name,
+        role: user.role
+      }
+    });
+  });
+});
+
+// 3. Get Personnel Users List
+app.get('/api/users', (req, res) => {
+  db.all(`SELECT name FROM users ORDER BY name ASC`, [], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+    res.json({ success: true, users: rows.map(r => r.name) });
+  });
+});
+
+// 4. Send BGL Trade Log via WhatsApp
 app.post('/api/send-log', async (req, res) => {
   try {
     const { type = 'BUY', amount, price, profit, info, trader, message } = req.body;
+
+    if (!trader || String(trader).trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'İşlemi yapan personel seçilmedi. Lütfen oturum açın.'
+      });
+    }
 
     if (clientStatus !== 'CONNECTED') {
       return res.status(503).json({
@@ -290,7 +366,7 @@ app.post('/api/send-log', async (req, res) => {
       id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
       timestamp: new Date().toISOString(),
       recipient: TARGET_GROUP_ID.replace('@g.us', ''),
-      trader: trader || 'Ebubekir',
+      trader: String(trader).trim(),
       type: String(type).toUpperCase(),
       amount,
       price,
@@ -311,7 +387,7 @@ app.post('/api/send-log', async (req, res) => {
     logsHistory.unshift(logEntry);
     if (logsHistory.length > 100) logsHistory.pop(); // Keep last 100 logs in memory
 
-    console.log(`✅ [BGL Trade Log Sent] -> ${TARGET_GROUP_ID}: [${type}] ${amount}bgl`);
+    console.log(`✅ [BGL Trade Log Sent] -> ${TARGET_GROUP_ID}: [${type}] ${amount}bgl by ${trader}`);
 
     return res.json({
       success: true,
@@ -328,7 +404,7 @@ app.post('/api/send-log', async (req, res) => {
   }
 });
 
-// 3. Get Logs History from SQLite Database
+// 5. Get Logs History from SQLite Database
 app.get('/api/logs', async (req, res) => {
   try {
     const dbLogs = await getLogsFromDb();
@@ -346,8 +422,135 @@ app.get('/api/logs', async (req, res) => {
   }
 });
 
+// 6. Admin Login API (Master Password: bayro3100)
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (password === 'bayro3100') {
+    return res.json({
+      success: true,
+      message: 'Admin girişi başarılı!',
+      token: 'admin_session_bayro3100'
+    });
+  } else {
+    return res.status(401).json({
+      success: false,
+      error: 'Hatalı Admin Ana Şifresi!'
+    });
+  }
+});
+
+// 7. Get All Personnel Passwords (Admin Only)
+app.get('/api/admin/users', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader !== 'Bearer admin_session_bayro3100' && req.query.adminKey !== 'bayro3100') {
+    return res.status(403).json({ success: false, error: 'Yetkisiz erişim.' });
+  }
+
+  db.all(`SELECT name, password, role, updatedAt FROM users ORDER BY name ASC`, [], (err, rows) => {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+    res.json({ success: true, users: rows });
+  });
+});
+
+// 8. Update Personnel Password (Admin Only)
+app.post('/api/admin/update-password', (req, res) => {
+  const { name, newPassword, adminToken } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (authHeader !== 'Bearer admin_session_bayro3100' && adminToken !== 'admin_session_bayro3100') {
+    return res.status(403).json({ success: false, error: 'Yetkisiz admin erişimi.' });
+  }
+
+  if (!name || !newPassword) {
+    return res.status(400).json({ success: false, error: 'Personel ismi ve yeni şifre gereklidir.' });
+  }
+
+  const sql = `UPDATE users SET password = ?, updatedAt = ? WHERE name = ?`;
+  const now = new Date().toISOString();
+
+  db.run(sql, [String(newPassword).trim(), now, String(name).trim()], function(err) {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+    if (this.changes === 0) return res.status(404).json({ success: false, error: 'Personel bulunamadı.' });
+
+    console.log(`🔑 [Password Update] Personel: ${name} şifresi başarıyla değiştirildi.`);
+    res.json({ success: true, message: `${name} isimli personelin şifresi güncellendi.` });
+  });
+});
+
+// 9. Accounting & Analytics API (Admin Only)
+app.get('/api/admin/accounting', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader !== 'Bearer admin_session_bayro3100' && req.query.adminKey !== 'bayro3100') {
+    return res.status(403).json({ success: false, error: 'Yetkisiz admin erişimi.' });
+  }
+
+  db.all(`SELECT * FROM logs ORDER BY timestamp DESC`, [], (err, logs) => {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+
+    let totalBuyAmount = 0;
+    let totalBuyPrice = 0;
+    let totalSoldAmount = 0;
+    let totalSoldPrice = 0;
+    let totalProfit = 0;
+    let totalTrades = logs.length;
+
+    const adminStats = {};
+
+    logs.forEach(log => {
+      const trader = log.trader || 'Bilinmiyor';
+      if (!adminStats[trader]) {
+        adminStats[trader] = {
+          trader,
+          buyCount: 0,
+          buyAmount: 0,
+          buyPrice: 0,
+          soldCount: 0,
+          soldAmount: 0,
+          soldProfit: 0,
+          totalTrades: 0
+        };
+      }
+
+      const amt = parseFloat(log.amount) || 0;
+      const prc = parseFloat(log.price) || 0;
+      const prft = parseFloat(log.profit) || 0;
+
+      adminStats[trader].totalTrades += 1;
+
+      if (log.type === 'BUY') {
+        totalBuyAmount += amt;
+        totalBuyPrice += prc;
+        adminStats[trader].buyCount += 1;
+        adminStats[trader].buyAmount += amt;
+        adminStats[trader].buyPrice += prc;
+      } else if (log.type === 'SOLD') {
+        totalSoldAmount += amt;
+        totalSoldPrice += prc;
+        totalProfit += prft;
+        adminStats[trader].soldCount += 1;
+        adminStats[trader].soldAmount += amt;
+        adminStats[trader].soldProfit += prft;
+      }
+    });
+
+    res.json({
+      success: true,
+      summary: {
+        totalTrades,
+        totalBuyAmount,
+        totalBuyPrice,
+        totalSoldAmount,
+        totalSoldPrice,
+        totalProfit
+      },
+      adminBreakdown: Object.values(adminStats)
+    });
+  });
+});
+
 // Start Express Server
 app.listen(PORT, () => {
   console.log(`🚀 [Server] Sunucu http://localhost:${PORT} adresinde yayında.`);
-  console.log(`📱 [Web UI] Arayüze erişmek için tarayıcıda http://localhost:${PORT} açabilirsiniz.`);
+  console.log(`📱 [Web UI] Main App: http://localhost:${PORT}`);
+  console.log(`🛡️ [Admin UI] Admin Panel: http://localhost:${PORT}/admin`);
 });
