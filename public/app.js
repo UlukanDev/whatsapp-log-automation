@@ -1,0 +1,319 @@
+let currentStatus = null;
+let qrcodeInstance = null;
+let allLogs = [];
+
+// DOM Loaded Initialization
+document.addEventListener('DOMContentLoaded', () => {
+  checkStatus();
+  fetchLogs();
+  
+  // Auto polling status every 3 seconds
+  setInterval(checkStatus, 3000);
+
+  // Manual status refresh button
+  document.getElementById('btn-refresh-status')?.addEventListener('click', checkStatus);
+});
+
+// Check WhatsApp Client Status
+async function checkStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    
+    currentStatus = data.status;
+    updateStatusUI(data);
+
+  } catch (error) {
+    console.error('Status fetch error:', error);
+    updateStatusBadge('DISCONNECTED', 'Sunucu Çevrimdışı');
+  }
+}
+
+// Update UI elements based on status payload
+function updateStatusUI(data) {
+  const { status, qr, clientInfo } = data;
+
+  const qrContainer = document.getElementById('qr-container');
+  const deviceInfo = document.getElementById('device-info');
+  const qrWrapper = document.getElementById('qrcode-canvas');
+  const qrSpinner = document.getElementById('qr-spinner');
+  const qrMessage = document.getElementById('qr-message');
+
+  switch (status) {
+    case 'INITIALIZING':
+      updateStatusBadge('INITIALIZING', 'WhatsApp Başlatılıyor...');
+      qrContainer.classList.remove('hidden');
+      deviceInfo.classList.add('hidden');
+      qrSpinner.classList.remove('hidden');
+      qrWrapper.innerHTML = '';
+      qrMessage.textContent = 'WhatsApp Web başlatılıyor, lütfen bekleyin...';
+      break;
+
+    case 'QR_READY':
+      updateStatusBadge('QR_READY', 'QR Kod Okutulması Bekleniyor');
+      qrContainer.classList.remove('hidden');
+      deviceInfo.classList.add('hidden');
+      qrSpinner.classList.add('hidden');
+      qrMessage.textContent = 'Lütfen WhatsApp mobil uygulamanızdan bu QR kodu taratın.';
+      
+      if (qr) {
+        renderQRCode(qr);
+      }
+      break;
+
+    case 'CONNECTED':
+      updateStatusBadge('CONNECTED', 'WhatsApp Bağlı & Hazır');
+      qrContainer.classList.add('hidden');
+      deviceInfo.classList.remove('hidden');
+      
+      if (clientInfo) {
+        document.getElementById('device-name').textContent = clientInfo.pushname || 'Bağlı Kullanıcı';
+        document.getElementById('device-phone').textContent = clientInfo.wid ? `+${clientInfo.wid}` : 'Oturum Aktif';
+      }
+      break;
+
+    case 'DISCONNECTED':
+    default:
+      updateStatusBadge('DISCONNECTED', 'Bağlantı Kesildi');
+      qrContainer.classList.remove('hidden');
+      deviceInfo.classList.add('hidden');
+      qrSpinner.classList.add('hidden');
+      qrWrapper.innerHTML = '';
+      qrMessage.textContent = 'WhatsApp bağlantısı kopuk. Yeniden bağlanılıyor...';
+      break;
+  }
+}
+
+// Render QR Code using qrcodejs
+function renderQRCode(qrString) {
+  const qrWrapper = document.getElementById('qrcode-canvas');
+  
+  // If QR code is already rendered with the same content, skip
+  if (qrWrapper.dataset.qr === qrString) return;
+  
+  qrWrapper.innerHTML = '';
+  qrWrapper.dataset.qr = qrString;
+
+  if (typeof QRCode !== 'undefined') {
+    new QRCode(qrWrapper, {
+      text: qrString,
+      width: 180,
+      height: 180,
+      colorDark: "#0b0f17",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } else {
+    qrWrapper.textContent = 'QR kütüphanesi yüklenemedi.';
+  }
+}
+
+// Update Status Badge UI
+function updateStatusBadge(type, message) {
+  const badge = document.getElementById('status-badge');
+  const text = document.getElementById('status-text');
+
+  badge.className = 'status-badge';
+  
+  switch (type) {
+    case 'INITIALIZING':
+      badge.classList.add('status-initializing');
+      break;
+    case 'QR_READY':
+      badge.classList.add('status-qr');
+      break;
+    case 'CONNECTED':
+      badge.classList.add('status-connected');
+      break;
+    case 'DISCONNECTED':
+    default:
+      badge.classList.add('status-disconnected');
+      break;
+  }
+
+  text.textContent = message;
+}
+
+// Handle Form Submission (Send Log)
+async function handleSendLog(e) {
+  e.preventDefault();
+
+  const btnSubmit = document.getElementById('btn-submit');
+  const alertEl = document.getElementById('form-alert');
+
+  const payload = {
+    phone: document.getElementById('phone').value.trim(),
+    level: document.getElementById('level').value,
+    title: document.getElementById('title').value.trim(),
+    source: document.getElementById('source').value.trim(),
+    message: document.getElementById('message').value.trim(),
+    details: document.getElementById('details').value.trim()
+  };
+
+  // Button loading state
+  btnSubmit.disabled = true;
+  btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gönderiliyor...';
+  alertEl.className = 'alert hidden';
+
+  try {
+    const res = await fetch('/api/send-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      showAlert('alert-success', `<i class="fa-solid fa-circle-check"></i> ${data.message}`);
+      fetchLogs(); // refresh log table
+    } else {
+      showAlert('alert-error', `<i class="fa-solid fa-triangle-exclamation"></i> ${data.error}`);
+    }
+
+  } catch (err) {
+    showAlert('alert-error', `<i class="fa-solid fa-circle-xmark"></i> Sunucu ile iletişim kurulamadı: ${err.message}`);
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-paper-plane"></i> WhatsApp İle Gönder';
+  }
+}
+
+// Show alert message in form
+function showAlert(typeClass, htmlContent) {
+  const alertEl = document.getElementById('form-alert');
+  alertEl.className = `alert ${typeClass}`;
+  alertEl.innerHTML = htmlContent;
+}
+
+// Reset form
+function resetForm() {
+  document.getElementById('log-form').reset();
+  document.getElementById('form-alert').className = 'alert hidden';
+}
+
+// Quick preset fill helper
+function fillTemplate(level) {
+  document.getElementById('level').value = level;
+  
+  const templates = {
+    INFO: {
+      title: 'Kullanıcı Girişi Gerçekleşti',
+      source: 'AuthService',
+      message: 'Kullanıcı hesabı sisteme başarıyla giriş yaptı.',
+      details: '{\n  "userId": "usr_7721",\n  "ip": "192.168.1.100"\n}'
+    },
+    SUCCESS: {
+      title: 'Ödeme Alma Başarılı',
+      source: 'PaymentGateway',
+      message: '₺1.250,00 tutarındaki sipariş ödemesi tamamlandı.',
+      details: '{\n  "orderId": "ORD-2026-9812",\n  "amount": 1250.00,\n  "currency": "TRY"\n}'
+    },
+    WARN: {
+      title: 'Yüksek CPU Kullanım Uyarısı',
+      source: 'SystemMonitor',
+      message: 'Sunucu CPU kullanımı 2 dakikadır %85 seviyesinin üzerinde.',
+      details: '{\n  "cpuUsage": "88.4%",\n  "activeConnections": 340\n}'
+    },
+    ERROR: {
+      title: 'Veritabanı Bağlantı Hatası',
+      source: 'DatabasePool',
+      message: 'Ana MySQL sunucusuna bağlanırken connection timeout hatası alındı.',
+      details: '{\n  "errorCode": "ETIMEDOUT",\n  "attempts": 3\n}'
+    }
+  };
+
+  if (templates[level]) {
+    document.getElementById('title').value = templates[level].title;
+    document.getElementById('source').value = templates[level].source;
+    document.getElementById('message').value = templates[level].message;
+    document.getElementById('details').value = templates[level].details;
+  }
+}
+
+// Fetch logs history from server
+async function fetchLogs() {
+  try {
+    const res = await fetch('/api/logs');
+    const data = await res.json();
+
+    if (data.success) {
+      allLogs = data.logs;
+      renderLogsTable(allLogs);
+    }
+  } catch (error) {
+    console.error('Fetch logs error:', error);
+  }
+}
+
+// Filter logs by search term
+function filterLogs() {
+  const query = document.getElementById('search-log').value.toLowerCase();
+  const filtered = allLogs.filter(log => 
+    log.title.toLowerCase().includes(query) ||
+    log.message.toLowerCase().includes(query) ||
+    log.recipient.includes(query) ||
+    log.level.toLowerCase().includes(query) ||
+    (log.source && log.source.toLowerCase().includes(query))
+  );
+  renderLogsTable(filtered);
+}
+
+// Render logs table rows
+function renderLogsTable(logs) {
+  const tbody = document.getElementById('logs-tbody');
+
+  if (!logs || logs.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="text-center empty-state">
+          <i class="fa-regular fa-folder-open"></i> Gösterilecek log kaydı bulunamadı.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const levelBadgeMap = {
+    INFO: '<span class="badge badge-info"><i class="fa-solid fa-circle-info"></i> INFO</span>',
+    SUCCESS: '<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> SUCCESS</span>',
+    WARN: '<span class="badge badge-warn"><i class="fa-solid fa-triangle-exclamation"></i> WARN</span>',
+    ERROR: '<span class="badge badge-error"><i class="fa-solid fa-circle-exclamation"></i> ERROR</span>'
+  };
+
+  tbody.innerHTML = logs.map(log => {
+    const dateFormatted = new Date(log.timestamp).toLocaleString('tr-TR');
+    const badge = levelBadgeMap[log.level] || `<span class="badge">${log.level}</span>`;
+    const detailsHtml = log.details ? `<pre class="details-preview">${escapeHtml(log.details)}</pre>` : '<span class="text-muted">-</span>';
+
+    return `
+      <tr>
+        <td style="white-space: nowrap; font-size: 0.8rem; color: var(--text-muted);">${dateFormatted}</td>
+        <td>${badge}</td>
+        <td style="font-family: var(--font-mono); font-size: 0.85rem;">+${escapeHtml(log.recipient)}</td>
+        <td>
+          <strong>${escapeHtml(log.title)}</strong>
+          ${log.source ? `<br><small style="color: var(--text-muted);">📍 ${escapeHtml(log.source)}</small>` : ''}
+        </td>
+        <td>
+          <div>${escapeHtml(log.message)}</div>
+          ${detailsHtml}
+        </td>
+        <td>
+          <span class="badge badge-success"><i class="fa-solid fa-check-double"></i> Sent</span>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Utility: HTML escaper
+function escapeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
