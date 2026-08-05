@@ -27,6 +27,9 @@ function initTraderSelection() {
 function handleTraderChange() {
   const traderSelect = document.getElementById('trader-select');
   if (traderSelect) {
+    if (traderSelect.value) {
+      traderSelect.classList.remove('input-error');
+    }
     localStorage.setItem('trader_name', traderSelect.value);
     updatePreview();
   }
@@ -61,7 +64,8 @@ function updatePreview() {
   const amount = document.getElementById('amount').value || '0';
   const price = document.getElementById('price').value || '0';
   const profit = document.getElementById('profit').value || '0';
-  const trader = document.getElementById('trader-select')?.value || 'Ebubekir';
+  const traderSelect = document.getElementById('trader-select');
+  const trader = (traderSelect && traderSelect.value) ? traderSelect.value : '[Seçilmedi]';
   const info = document.getElementById('info').value.trim();
 
   const previewEl = document.getElementById('message-preview');
@@ -208,9 +212,23 @@ async function handleSendLog(e) {
 
   const btnSubmit = document.getElementById('btn-submit');
   const alertEl = document.getElementById('form-alert');
+  const traderSelect = document.getElementById('trader-select');
+  const traderValue = traderSelect?.value ? traderSelect.value.trim() : '';
+
+  // Validation: Trader must be selected
+  if (!traderValue) {
+    showAlert('alert-error', `<i class="fa-solid fa-triangle-exclamation"></i> Lütfen işlemi yapan personeli (Trader) seçiniz!`);
+    if (traderSelect) {
+      traderSelect.classList.add('input-error');
+      traderSelect.focus();
+    }
+    return;
+  }
+
+  traderSelect?.classList.remove('input-error');
 
   const payload = {
-    trader: document.getElementById('trader-select')?.value || 'Ebubekir',
+    trader: traderValue,
     type: document.getElementById('trade-type').value,
     amount: document.getElementById('amount').value.trim(),
     price: document.getElementById('price').value.trim(),

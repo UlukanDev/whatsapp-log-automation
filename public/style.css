@@ -708,6 +708,18 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
   box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
 }
 
+.input-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3) !important;
+  animation: inputShake 0.3s ease-in-out;
+}
+
+@keyframes inputShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
 .input-with-unit {
   position: relative;
   display: flex;
