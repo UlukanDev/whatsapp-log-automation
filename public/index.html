@@ -71,20 +71,7 @@
 
           <div class="info-box">
             <i class="fa-solid fa-circle-info"></i>
-            <span>Log bildirimi göndermek için WhatsApp Web oturumunuzun aktif kalması gerekmektedir.</span>
-          </div>
-
-          <!-- WhatsApp Groups Card -->
-          <div class="groups-section">
-            <div class="groups-header">
-              <h3><i class="fa-solid fa-users"></i> Bağlı WhatsApp Grupları</h3>
-              <button class="btn-icon btn-sm" onclick="fetchGroups()" title="Grupları Yenile">
-                <i class="fa-solid fa-arrows-rotate"></i>
-              </button>
-            </div>
-            <div id="groups-list" class="groups-list">
-              <p class="text-muted text-center" style="font-size: 0.8rem;">Oturum açıldığında gruplar burada listelenir.</p>
-            </div>
+            <span>Log bildirimi doğrudan belirlenen WhatsApp Log Grubuna gönderilir. WhatsApp Web oturumunuzun aktif kalması gerekmektedir.</span>
           </div>
         </div>
       </aside>
@@ -110,13 +97,6 @@
                 </button>
               </div>
               <input type="hidden" id="trade-type" value="BUY">
-            </div>
-
-            <!-- 2. Alıcı Grup ID -->
-            <div class="form-group">
-              <label for="phone"><i class="fa-solid fa-users"></i> Alıcı Grup ID</label>
-              <input type="text" id="phone" placeholder="Örn: 120363041234567890@g.us veya Telefon Numarası" required oninput="updatePreview()">
-              <span class="field-hint">Sol taraftaki gruptan tıklayarak veya manuel girin</span>
             </div>
 
             <!-- 3. Miktar (bgl) & Fiyat (tl) -->

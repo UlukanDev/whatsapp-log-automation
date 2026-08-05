@@ -23,6 +23,7 @@ let currentQr = null;
 let clientInfo = null;
 let cachedGroups = [];
 const logsHistory = [];
+const TARGET_GROUP_ID = process.env.TARGET_GROUP_ID || '120363288734876760@g.us';
 
 // Helper: Auto-detect system Chrome / Edge executable on Windows
 function getSystemChromePath() {
@@ -69,7 +70,7 @@ client.on('qr', (qr) => {
 });
 
 // Event: Client Ready
-client.on('ready', async () => {
+client.on('ready', () => {
   clientStatus = 'CONNECTED';
   currentQr = null;
   clientInfo = client.info ? {
@@ -79,32 +80,39 @@ client.on('ready', async () => {
   } : { pushname: 'WhatsApp User' };
 
   console.log('🟢 [WhatsApp Bot] Başarıyla bağlandı! Hazır.');
+  console.log(`🎯 [Hedef Log Grubu]: \x1b[32m${TARGET_GROUP_ID}\x1b[0m\n`);
+});
 
-  // Sohbetleri ve grupları tara ve önbelleğe al
+// Event: Message Created (Gelen ve Giden Mesajlar - Sadece Hedef Grup)
+client.on('message_create', async (msg) => {
   try {
-    const chats = await client.getChats();
-    const groups = chats.filter(chat => chat.isGroup);
-    cachedGroups = groups.map(g => ({
-      id: g.id._serialized,
-      name: g.name,
-      unreadCount: g.unreadCount || 0,
-      timestamp: g.timestamp ? new Date(g.timestamp * 1000).toISOString() : null
-    }));
+    const isOutgoing = msg.fromMe;
+    let chatId = isOutgoing ? msg.to : msg.from;
 
-    console.log('\n========================================');
-    console.log(' 👥 [WhatsApp Grupları Taranıyor...]');
-    if (cachedGroups.length === 0) {
-      console.log(' ⚠️ Hesabınıza ait bağlı WhatsApp grubu bulunamadı.');
-    } else {
-      console.log(` 📌 Toplam ${cachedGroups.length} WhatsApp Grubu Bulundu:\n`);
-      cachedGroups.forEach((g, index) => {
-        console.log(`   ${index + 1}. 📢 Grup İsmi : \x1b[36m"${g.name}"\x1b[0m`);
-        console.log(`      🔑 Grup ID   : \x1b[32m${g.id}\x1b[0m\n`);
-      });
+    let chatName = 'Bilinmiyor';
+    try {
+      const chat = await msg.getChat();
+      if (chat) {
+        chatName = chat.name || chatName;
+        if (chat.id && chat.id._serialized) {
+          chatId = chat.id._serialized;
+        }
+      }
+    } catch (e) {
+      // Fallback
     }
-    console.log('========================================\n');
+
+    // Filtre: Sadece hedef grup ID'si (120363288734876760@g.us) olan mesajları terminale bas
+    if (chatId !== TARGET_GROUP_ID && msg.from !== TARGET_GROUP_ID && msg.to !== TARGET_GROUP_ID) {
+      return;
+    }
+
+    const typeTag = isOutgoing ? '\x1b[33m📤 [Giden Mesaj]\x1b[0m' : '\x1b[36m📩 [Gelen Mesaj]\x1b[0m';
+    const content = msg.body || (msg.hasMedia ? '[Medya/Görsel]' : '');
+
+    console.log(`${typeTag} \x1b[1mSohbet:\x1b[0m \x1b[35m${chatName}\x1b[0m | \x1b[1mSohbet ID:\x1b[0m \x1b[32m${chatId}\x1b[0m | \x1b[1mİçerik:\x1b[0m ${content}`);
   } catch (err) {
-    console.error('⚠️ [Gruplar Taranırken Hata]:', err.message);
+    console.error('⚠️ [Mesaj İşleme Hatası]:', err.message);
   }
 });
 
@@ -177,6 +185,7 @@ app.get('/api/status', (req, res) => {
     status: clientStatus,
     qr: currentQr,
     clientInfo: clientInfo,
+    targetGroup: TARGET_GROUP_ID,
     timestamp: new Date().toISOString()
   });
 });
@@ -184,16 +193,9 @@ app.get('/api/status', (req, res) => {
 // 2. Send BGL Trade Log via WhatsApp
 app.post('/api/send-log', async (req, res) => {
   try {
-    const { phone, groupId, type = 'BUY', amount, price, profit, info, message } = req.body;
+    const { type = 'BUY', amount, price, profit, info, message } = req.body;
 
-    const targetPhone = phone || groupId || process.env.DEFAULT_TARGET_NUMBER;
-
-    if (!targetPhone) {
-      return res.status(400).json({
-        success: false,
-        error: 'Hedef grup ID veya telefon numarası girilmedi.'
-      });
-    }
+    const targetPhone = TARGET_GROUP_ID;
 
     if (clientStatus !== 'CONNECTED') {
       return res.status(503).json({
