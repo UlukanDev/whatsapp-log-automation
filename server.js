@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
+const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
 
@@ -23,7 +24,7 @@ let clientInfo = null;
 const logsHistory = [];
 const TARGET_GROUP_ID = process.env.TARGET_GROUP_ID || '120363288734876760@g.us';
 
-// Helper: Auto-detect system Chrome / Edge executable on Windows
+// Helper: Auto-detect system Chrome / Edge executable on Windows or fallback to Puppeteer Chromium
 function getSystemChromePath() {
   const paths = [
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -34,7 +35,11 @@ function getSystemChromePath() {
   for (const p of paths) {
     if (fs.existsSync(p)) return p;
   }
-  return undefined;
+  try {
+    return puppeteer.executablePath();
+  } catch (e) {
+    return undefined;
+  }
 }
 
 // Initialize WhatsApp Web JS Client
@@ -44,7 +49,7 @@ const client = new Client({
   }),
   puppeteer: {
     headless: true,
-    ...(process.env.PUPPETEER_EXECUTABLE_PATH ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH } : (getSystemChromePath() ? { executablePath: getSystemChromePath() } : {})),
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || getSystemChromePath(),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -52,7 +57,8 @@ const client = new Client({
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
-      '--disable-gpu'
+      '--disable-gpu',
+      '--single-process'
     ]
   }
 });
