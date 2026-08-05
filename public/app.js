@@ -79,7 +79,12 @@ function updatePreview() {
 
 const TARGET_GROUP_URL = 'https://chat.whatsapp.com/DTRkY19iZklEk5ZtQv2DSH?s=cl&p=a&ilr=1';
 
-// Handle Form Submission (WhatsApp Target Group & Scheme Redirection)
+// Helper: Check if device is mobile
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Handle Form Submission (Dual Routing: WhatsApp Web for PC / Scheme for Mobile)
 async function handleSendLog(e) {
   e.preventDefault();
 
@@ -93,7 +98,7 @@ async function handleSendLog(e) {
   const formattedText = generateFormattedMessage();
   const encodedText = encodeURIComponent(formattedText);
 
-  // Try copying formatted message to clipboard automatically
+  // 1. Panoya Kopyalama (Clipboard Copy)
   let copied = false;
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -104,7 +109,19 @@ async function handleSendLog(e) {
     console.warn('Clipboard copy failed:', err);
   }
 
-  // Save entry to local history
+  // 2. Akıllı Yönlendirme Linki (Smart Dual Routing)
+  const isMobile = isMobileDevice();
+  let whatsappUrl = '';
+
+  if (isMobile) {
+    // Mobil Cihazlar: api.whatsapp.com/send?text=... (Mobil WhatsApp Uygulaması)
+    whatsappUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
+  } else {
+    // Masaüstü / PC: web.whatsapp.com/send?text=... (WhatsApp Web)
+    whatsappUrl = `https://web.whatsapp.com/send?text=${encodedText}`;
+  }
+
+  // 3. Yerel Geçmiş Kaydı (LocalStorage)
   const logEntry = {
     id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
     timestamp: new Date().toISOString(),
@@ -120,29 +137,30 @@ async function handleSendLog(e) {
 
   saveLogEntry(logEntry);
 
-  const sendSchemeUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
-
+  // 4. Bildirim Gösterimi
+  const deviceTag = isMobile ? '📱 Mobil WhatsApp' : '💻 WhatsApp Web (Masaüstü)';
+  
   if (copied) {
     showAlert('alert-success', `
-      <i class="fa-solid fa-circle-check"></i> <strong>Log mesajı kopyalandı ve Hedef WhatsApp Grubu açılıyor!</strong><br>
-      Açılan sohbet kutusuna yapıştırıp (Paste) mesajı anında gönderebilirsiniz.
+      <i class="fa-solid fa-circle-check"></i> <strong>Mesaj kopyalandı, ${deviceTag} açılıyor...</strong><br>
+      Açılan sohbet ekranında mesaj hazır yüklenecektir veya sohbet kutusuna yapıştırabilirsiniz.
       <div style="margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <a href="${TARGET_GROUP_URL}" target="_blank" class="btn-chip chip-success"><i class="fa-solid fa-users"></i> Hedef Grubu Aç</a>
-        <a href="${sendSchemeUrl}" target="_blank" class="btn-chip chip-warning"><i class="fa-solid fa-share"></i> Veya Sohbet Seçerek Gönder</a>
+        <a href="${whatsappUrl}" target="_blank" class="btn-chip chip-success"><i class="fa-brands fa-whatsapp"></i> ${isMobile ? 'WhatsApp Uygulamasında Aç' : 'WhatsApp Web\'de Aç'}</a>
+        <a href="${TARGET_GROUP_URL}" target="_blank" class="btn-chip chip-warning"><i class="fa-solid fa-users"></i> Hedef Gruba Git</a>
       </div>
     `);
   } else {
     showAlert('alert-success', `
-      <i class="fa-solid fa-circle-check"></i> <strong>Hedef WhatsApp Grubu açılıyor...</strong>
+      <i class="fa-solid fa-circle-check"></i> <strong>${deviceTag} yönlendirmesi başlatıldı...</strong>
       <div style="margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <a href="${TARGET_GROUP_URL}" target="_blank" class="btn-chip chip-success"><i class="fa-solid fa-users"></i> Hedef Grubu Aç</a>
-        <a href="${sendSchemeUrl}" target="_blank" class="btn-chip chip-warning"><i class="fa-solid fa-share"></i> Metin ile Gönder</a>
+        <a href="${whatsappUrl}" target="_blank" class="btn-chip chip-success"><i class="fa-brands fa-whatsapp"></i> WhatsApp'ta Aç</a>
+        <a href="${TARGET_GROUP_URL}" target="_blank" class="btn-chip chip-warning"><i class="fa-solid fa-users"></i> Hedef Gruba Git</a>
       </div>
     `);
   }
 
-  // Direct redirection to Target Group URL
-  window.open(TARGET_GROUP_URL, '_blank');
+  // 5. Yönlendirmeyi Tetikle
+  window.open(whatsappUrl, '_blank');
 }
 
 // Show alert message in form
