@@ -31,6 +31,7 @@ function initAuthCheck() {
       traderSelect.value = loggedUser;
       traderSelect.disabled = true; // Lock trader input to logged user
     }
+    fetchUserStock();
   } else {
     loginModal?.classList.remove('hidden');
     userBar?.classList.add('hidden');
@@ -39,6 +40,37 @@ function initAuthCheck() {
     }
   }
   updatePreview();
+}
+
+// Fetch Personal Stock Balance
+async function fetchUserStock() {
+  if (!loggedUser) return;
+  try {
+    const res = await fetch(`/api/stock?trader=${encodeURIComponent(loggedUser)}`);
+    const data = await res.json();
+    if (data.success) {
+      updateStockBadgeUI(data.stock);
+    }
+  } catch (err) {
+    console.error('Stock fetch error:', err);
+  }
+}
+
+// Update Stock Badge UI
+function updateStockBadgeUI(stockVal) {
+  const badge = document.getElementById('user-stock-badge');
+  const valEl = document.getElementById('user-stock-value');
+  if (!badge || !valEl) return;
+
+  const num = parseFloat(stockVal) || 0;
+  const formatted = num.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+  valEl.textContent = `${formatted} bgl`;
+
+  if (num < 0) {
+    badge.className = 'stock-badge stock-negative';
+  } else {
+    badge.className = 'stock-badge stock-positive';
+  }
 }
 
 // Handle Personnel Login Form Submit
@@ -310,6 +342,7 @@ async function handleSendLog(e) {
     if (data.success) {
       showAlert('alert-success', `<i class="fa-solid fa-circle-check"></i> Ticaret logu WhatsApp grubuna başarıyla gönderildi!`);
       fetchLogs(); // refresh log table
+      fetchUserStock(); // real-time stock balance update
     } else {
       showAlert('alert-error', `<i class="fa-solid fa-triangle-exclamation"></i> ${data.error}`);
     }

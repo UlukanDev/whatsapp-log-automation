@@ -132,7 +132,7 @@ function renderAdminBreakdown(breakdown, totalTradesCount) {
   if (!breakdown || breakdown.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center empty-state">Henüz muhasebe kaydı bulunmuyor.</td>
+        <td colspan="6" class="text-center empty-state">Henüz muhasebe kaydı bulunmuyor.</td>
       </tr>
     `;
     return;
@@ -141,11 +141,18 @@ function renderAdminBreakdown(breakdown, totalTradesCount) {
   tbody.innerHTML = breakdown.map(item => {
     const tradeShare = totalTradesCount > 0 ? ((item.totalTrades / totalTradesCount) * 100).toFixed(1) : 0;
     const profitFormatted = item.soldProfit >= 0 ? `+${formatNumber(item.soldProfit)} TL` : `${formatNumber(item.soldProfit)} TL`;
+    const stockVal = parseFloat(item.currentStock) || 0;
+    const stockBadge = stockVal < 0 
+      ? `<span class="badge badge-error" style="font-size: 0.85rem;"><i class="fa-solid fa-arrow-trend-down"></i> ${formatNumber(stockVal)} bgl</span>` 
+      : `<span class="badge badge-success" style="font-size: 0.85rem;"><i class="fa-solid fa-arrow-trend-up"></i> ${formatNumber(stockVal)} bgl</span>`;
 
     return `
       <tr>
         <td style="font-weight: 600; color: #60a5fa;">
           <i class="fa-solid fa-user-tie"></i> ${escapeHtml(item.trader)}
+        </td>
+        <td>
+          ${stockBadge}
         </td>
         <td>
           <strong>${item.buyCount} işlem</strong> (${formatNumber(item.buyAmount)} bgl / ${formatNumber(item.buyPrice)} TL)

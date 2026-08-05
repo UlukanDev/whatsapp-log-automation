@@ -523,6 +523,7 @@ app.get('/api/admin/accounting', (req, res) => {
         adminStats[trader].buyCount += 1;
         adminStats[trader].buyAmount += amt;
         adminStats[trader].buyPrice += prc;
+        adminStats[trader].currentStock = (adminStats[trader].currentStock || 0) + amt;
       } else if (log.type === 'SOLD') {
         totalSoldAmount += amt;
         totalSoldPrice += prc;
@@ -530,6 +531,7 @@ app.get('/api/admin/accounting', (req, res) => {
         adminStats[trader].soldCount += 1;
         adminStats[trader].soldAmount += amt;
         adminStats[trader].soldProfit += prft;
+        adminStats[trader].currentStock = (adminStats[trader].currentStock || 0) - amt;
       }
     });
 
@@ -545,6 +547,40 @@ app.get('/api/admin/accounting', (req, res) => {
       },
       adminBreakdown: Object.values(adminStats)
     });
+  });
+});
+
+// 10. Get Personal Stock Balance (Supports Negative Balance)
+app.get('/api/stock', (req, res) => {
+  const trader = req.query.trader;
+  
+  db.all(`SELECT trader, type, amount FROM logs`, [], (err, rows) => {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+
+    const stocksMap = {};
+
+    rows.forEach(r => {
+      const tName = r.trader || 'Bilinmiyor';
+      if (stocksMap[tName] === undefined) stocksMap[tName] = 0;
+      const amt = parseFloat(r.amount) || 0;
+      if (r.type === 'BUY') {
+        stocksMap[tName] += amt;
+      } else if (r.type === 'SOLD') {
+        stocksMap[tName] -= amt;
+      }
+    });
+
+    if (trader) {
+      let matchedStock = 0;
+      Object.keys(stocksMap).forEach(key => {
+        if (key.toLowerCase() === String(trader).trim().toLowerCase()) {
+          matchedStock = stocksMap[key];
+        }
+      });
+      return res.json({ success: true, trader, stock: matchedStock });
+    }
+
+    return res.json({ success: true, stocks: stocksMap });
   });
 });
 
