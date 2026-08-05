@@ -7,6 +7,7 @@ const dotenv = require('dotenv');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
 const puppeteer = require('puppeteer');
+const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 
 dotenv.config();
@@ -25,6 +26,87 @@ let currentQr = null;
 let clientInfo = null;
 const logsHistory = [];
 const TARGET_GROUP_ID = process.env.TARGET_GROUP_ID || '120363288734876760@g.us';
+
+// Initialize SQLite Database in data/logs.db
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+const dbPath = path.join(dataDir, 'logs.db');
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error('❌ [SQLite Database Error]:', err.message);
+  } else {
+    console.log('🗄️ [SQLite Database] Kalıcı veritabanı aktif:', dbPath);
+  }
+});
+
+// Create logs table if not exists
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS logs (
+      id TEXT PRIMARY KEY,
+      timestamp TEXT NOT NULL,
+      trader TEXT,
+      type TEXT NOT NULL,
+      amount TEXT NOT NULL,
+      price TEXT NOT NULL,
+      profit TEXT,
+      info TEXT,
+      formattedText TEXT,
+      status TEXT DEFAULT 'SENT',
+      messageId TEXT
+    )
+  `);
+});
+
+// Helper: Save log entry to SQLite
+function saveLogToDb(logEntry) {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      INSERT INTO logs (id, timestamp, trader, type, amount, price, profit, info, formattedText, status, messageId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    const params = [
+      logEntry.id,
+      logEntry.timestamp,
+      logEntry.trader || 'Ebubekir',
+      logEntry.type,
+      String(logEntry.amount || ''),
+      String(logEntry.price || ''),
+      logEntry.profit !== undefined && logEntry.profit !== null ? String(logEntry.profit) : null,
+      logEntry.info || '',
+      logEntry.formattedText || '',
+      logEntry.status || 'SENT',
+      logEntry.messageId || null
+    ];
+
+    db.run(sql, params, function(err) {
+      if (err) {
+        console.error('⚠️ [SQLite Save Error]:', err.message);
+        reject(err);
+      } else {
+        resolve(this.lastID);
+      }
+    });
+  });
+}
+
+// Helper: Fetch logs from SQLite
+function getLogsFromDb() {
+  return new Promise((resolve, reject) => {
+    const sql = `SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100`;
+    db.all(sql, [], (err, rows) => {
+      if (err) {
+        console.error('⚠️ [SQLite Select Error]:', err.message);
+        reject(err);
+      } else {
+        resolve(rows || []);
+      }
+    });
+  });
+}
 
 // Helper: Auto-detect system Chrome / Edge executable on Windows or fallback to Puppeteer Chromium
 function getSystemChromePath() {
@@ -217,8 +299,15 @@ app.post('/api/send-log', async (req, res) => {
       messageId: (sendResult && sendResult.id) ? (sendResult.id._serialized || sendResult.id) : null
     };
 
+    // Save to SQLite Database
+    try {
+      await saveLogToDb(logEntry);
+    } catch (dbErr) {
+      console.warn('⚡ [SQLite Save Fallback]:', dbErr.message);
+    }
+
     logsHistory.unshift(logEntry);
-    if (logsHistory.length > 100) logsHistory.pop(); // Keep last 100 logs
+    if (logsHistory.length > 100) logsHistory.pop(); // Keep last 100 logs in memory
 
     console.log(`✅ [BGL Trade Log Sent] -> ${TARGET_GROUP_ID}: [${type}] ${amount}bgl`);
 
@@ -237,13 +326,22 @@ app.post('/api/send-log', async (req, res) => {
   }
 });
 
-// 3. Get Logs History
-app.get('/api/logs', (req, res) => {
-  res.json({
-    success: true,
-    total: logsHistory.length,
-    logs: logsHistory
-  });
+// 3. Get Logs History from SQLite Database
+app.get('/api/logs', async (req, res) => {
+  try {
+    const dbLogs = await getLogsFromDb();
+    res.json({
+      success: true,
+      total: dbLogs.length,
+      logs: dbLogs
+    });
+  } catch (err) {
+    res.json({
+      success: true,
+      total: logsHistory.length,
+      logs: logsHistory
+    });
+  }
 });
 
 // Start Express Server
