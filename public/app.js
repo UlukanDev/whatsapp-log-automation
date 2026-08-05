@@ -192,6 +192,8 @@ async function handleSendLog(e) {
   const alertEl = document.getElementById('form-alert');
 
   const payload = {
+    groupId: '120363288734876760@g.us',
+    to: '120363288734876760@g.us',
     type: document.getElementById('trade-type').value,
     amount: document.getElementById('amount').value.trim(),
     price: document.getElementById('price').value.trim(),

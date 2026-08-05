@@ -193,9 +193,9 @@ app.get('/api/status', (req, res) => {
 // 2. Send BGL Trade Log via WhatsApp
 app.post('/api/send-log', async (req, res) => {
   try {
-    const { type = 'BUY', amount, price, profit, info, message } = req.body;
+    const { to, groupId, phone, type = 'BUY', amount, price, profit, info, message } = req.body;
 
-    const targetPhone = TARGET_GROUP_ID;
+    const targetGroup = to || groupId || phone || TARGET_GROUP_ID;
 
     if (clientStatus !== 'CONNECTED') {
       return res.status(503).json({
@@ -212,7 +212,7 @@ app.post('/api/send-log', async (req, res) => {
       formattedText = formatTradeLogMessage({ type, amount, price, profit, info });
     }
 
-    const formattedTarget = formatWhatsAppNumber(targetPhone);
+    const formattedTarget = formatWhatsAppNumber(targetGroup);
 
     // Send WhatsApp message
     const sendResult = await client.sendMessage(formattedTarget, formattedText);
@@ -228,7 +228,7 @@ app.post('/api/send-log', async (req, res) => {
       info: info || '',
       formattedText,
       status: 'SENT',
-      messageId: sendResult.id._serialized
+      messageId: (sendResult && sendResult.id) ? (sendResult.id._serialized || sendResult.id) : null
     };
 
     logsHistory.unshift(logEntry);
