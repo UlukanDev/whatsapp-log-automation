@@ -4,6 +4,7 @@ let allLogs = [];
 
 // DOM Loaded Initialization
 document.addEventListener('DOMContentLoaded', () => {
+  initTraderSelection();
   checkStatus();
   fetchLogs();
   updatePreview();
@@ -14,6 +15,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // Manual status refresh button
   document.getElementById('btn-refresh-status')?.addEventListener('click', checkStatus);
 });
+
+// Trader Selection & LocalStorage Persistence
+function initTraderSelection() {
+  const savedTrader = localStorage.getItem('trader_name');
+  const traderSelect = document.getElementById('trader-select');
+  if (savedTrader && traderSelect) {
+    traderSelect.value = savedTrader;
+  }
+}
+
+function handleTraderChange() {
+  const traderSelect = document.getElementById('trader-select');
+  if (traderSelect) {
+    localStorage.setItem('trader_name', traderSelect.value);
+    updatePreview();
+  }
+}
 
 // Trade Type Switcher (BUY / SOLD)
 function setTradeType(type) {
@@ -44,6 +62,7 @@ function updatePreview() {
   const amount = document.getElementById('amount').value || '0';
   const price = document.getElementById('price').value || '0';
   const profit = document.getElementById('profit').value || '0';
+  const trader = document.getElementById('trader-select')?.value || 'Ebubekir';
   const info = document.getElementById('info').value.trim();
 
   const previewEl = document.getElementById('message-preview');
@@ -51,12 +70,12 @@ function updatePreview() {
 
   let previewText = '';
   if (type === 'BUY') {
-    previewText = `🔒 BUY: ${amount}bgl\n💥 PRICE: ${price}tl`;
+    previewText = `🔒 BUY: ${amount}bgl\n💥 PRICE: ${price}tl\n👤 TRADER: ${trader}`;
     if (info) {
       previewText += `\nℹ️ INFO: ${info}`;
     }
   } else {
-    previewText = `🔒 SOLD: ${amount}bgl\n💸 PROFİT: ${profit}tl`;
+    previewText = `🔒 SOLD: ${amount}bgl\n💸 PROFİT: ${profit}tl\n👤 TRADER: ${trader}`;
     if (info) {
       previewText += `\nℹ️ INFO: ${info}`;
     }
@@ -194,6 +213,7 @@ async function handleSendLog(e) {
   const payload = {
     groupId: '120363288734876760@g.us',
     to: '120363288734876760@g.us',
+    trader: document.getElementById('trader-select')?.value || 'Ebubekir',
     type: document.getElementById('trade-type').value,
     amount: document.getElementById('amount').value.trim(),
     price: document.getElementById('price').value.trim(),
@@ -239,6 +259,7 @@ function showAlert(typeClass, htmlContent) {
 // Reset form
 function resetForm() {
   document.getElementById('log-form').reset();
+  initTraderSelection();
   setTradeType('BUY');
   updatePreview();
   document.getElementById('form-alert').className = 'alert hidden';
@@ -264,6 +285,7 @@ function filterLogs() {
   const query = document.getElementById('search-log').value.toLowerCase();
   const filtered = allLogs.filter(log => 
     (log.type && log.type.toLowerCase().includes(query)) ||
+    (log.trader && log.trader.toLowerCase().includes(query)) ||
     (log.recipient && log.recipient.includes(query)) ||
     (log.formattedText && log.formattedText.toLowerCase().includes(query)) ||
     (log.info && log.info.toLowerCase().includes(query))
@@ -297,11 +319,13 @@ function renderLogsTable(logs) {
       ? `<strong>${escapeHtml(log.amount)} bgl</strong> / ${escapeHtml(log.price)} tl` 
       : `<strong>${escapeHtml(log.amount)} bgl</strong> / Kâr: <span style="color: #34d399; font-weight: 600;">${escapeHtml(log.profit)} tl</span>`;
 
+    const traderName = log.trader || 'Ebubekir';
+
     return `
       <tr>
         <td style="white-space: nowrap; font-size: 0.8rem; color: var(--text-muted);">${dateFormatted}</td>
         <td>${typeBadge}</td>
-        <td style="font-family: var(--font-mono); font-size: 0.825rem;">${escapeHtml(log.recipient)}</td>
+        <td style="font-weight: 600; font-size: 0.875rem; color: #60a5fa;"><i class="fa-solid fa-user-check"></i> ${escapeHtml(traderName)}</td>
         <td>${numbersText}</td>
         <td>
           <pre class="details-preview">${escapeHtml(log.formattedText || '')}</pre>

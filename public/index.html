@@ -85,6 +85,19 @@
 
         <div class="card-body">
           <form id="log-form" onsubmit="handleSendLog(event)">
+            <!-- 0. İşlemi Yapan Personel (Trader) -->
+            <div class="form-group">
+              <label for="trader-select"><i class="fa-solid fa-user-tag"></i> İşlemi Yapan Personel (Trader)</label>
+              <select id="trader-select" onchange="handleTraderChange()">
+                <option value="Ebubekir">👤 Ebubekir</option>
+                <option value="Ahmet">👤 Ahmet</option>
+                <option value="Mehmet">👤 Mehmet</option>
+                <option value="Ali">👤 Ali</option>
+                <option value="Ayşe">👤 Ayşe</option>
+                <option value="Can">👤 Can</option>
+              </select>
+            </div>
+
             <!-- 1. İşlem Tipi (BUY / SOLD) -->
             <div class="form-group">
               <label><i class="fa-solid fa-right-left"></i> İşlem Tipi</label>
@@ -175,7 +188,7 @@
                 <tr>
                   <th>Tarih / Saat</th>
                   <th>İşlem Tipi</th>
-                  <th>Hedef / Grup ID</th>
+                  <th>Personel (Trader)</th>
                   <th>Miktar & Fiyat</th>
                   <th>Mesaj İçeriği</th>
                   <th>Durum</th>

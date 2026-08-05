@@ -158,18 +158,19 @@ function formatWhatsAppNumber(phone) {
 }
 
 // Helper: Format BGL Trade Log message for WhatsApp
-function formatTradeLogMessage({ type, amount, price, profit, info }) {
+function formatTradeLogMessage({ type, amount, price, profit, info, trader }) {
   const isBuy = String(type || 'BUY').toUpperCase() === 'BUY';
   const infoText = (info && String(info).trim()) ? String(info).trim() : '';
+  const traderText = (trader && String(trader).trim()) ? String(trader).trim() : 'Ebubekir';
 
   if (isBuy) {
-    let msg = `🔒 BUY: ${amount || 0}bgl\n💥 PRICE: ${price || 0}tl`;
+    let msg = `🔒 BUY: ${amount || 0}bgl\n💥 PRICE: ${price || 0}tl\n👤 TRADER: ${traderText}`;
     if (infoText) {
       msg += `\nℹ️ INFO: ${infoText}`;
     }
     return msg;
   } else {
-    let msg = `🔒 SOLD: ${amount || 0}bgl\n💸 PROFİT: ${profit || 0}tl`;
+    let msg = `🔒 SOLD: ${amount || 0}bgl\n💸 PROFİT: ${profit || 0}tl\n👤 TRADER: ${traderText}`;
     if (infoText) {
       msg += `\nℹ️ INFO: ${infoText}`;
     }
@@ -193,7 +194,7 @@ app.get('/api/status', (req, res) => {
 // 2. Send BGL Trade Log via WhatsApp
 app.post('/api/send-log', async (req, res) => {
   try {
-    const { to, groupId, phone, type = 'BUY', amount, price, profit, info, message } = req.body;
+    const { to, groupId, phone, type = 'BUY', amount, price, profit, info, trader, message } = req.body;
 
     const targetGroup = to || groupId || phone || TARGET_GROUP_ID;
 
@@ -209,7 +210,7 @@ app.post('/api/send-log', async (req, res) => {
     if (message) {
       formattedText = message;
     } else {
-      formattedText = formatTradeLogMessage({ type, amount, price, profit, info });
+      formattedText = formatTradeLogMessage({ type, amount, price, profit, info, trader });
     }
 
     const formattedTarget = formatWhatsAppNumber(targetGroup);
@@ -221,6 +222,7 @@ app.post('/api/send-log', async (req, res) => {
       id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
       timestamp: new Date().toISOString(),
       recipient: formattedTarget.replace('@c.us', '').replace('@g.us', ''),
+      trader: trader || 'Ebubekir',
       type: String(type).toUpperCase(),
       amount,
       price,

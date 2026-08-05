@@ -379,6 +379,12 @@ input[type="text"], select, textarea {
   transition: var(--transition);
 }
 
+select option {
+  background-color: #0f172a;
+  color: #f1f5f9;
+  padding: 0.5rem;
+}
+
 input[type="text"]:focus, select:focus, textarea:focus {
   border-color: var(--primary-accent);
   box-shadow: 0 0 0 3px var(--primary-glow);
