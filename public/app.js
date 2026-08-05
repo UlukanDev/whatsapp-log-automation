@@ -1,10 +1,18 @@
+let currentStatus = null;
 let allLogs = [];
 
 // DOM Loaded Initialization
 document.addEventListener('DOMContentLoaded', () => {
   initTraderSelection();
-  loadLogsHistory();
+  checkStatus();
+  fetchLogs();
   updatePreview();
+  
+  // Auto polling status every 3 seconds
+  setInterval(checkStatus, 3000);
+
+  // Manual status refresh button
+  document.getElementById('btn-refresh-status')?.addEventListener('click', checkStatus);
 });
 
 // Trader Selection & LocalStorage Persistence
@@ -47,120 +55,195 @@ function setTradeType(type) {
   updatePreview();
 }
 
-// Build formatted message string
-function generateFormattedMessage() {
+// Live Preview Update
+function updatePreview() {
   const type = document.getElementById('trade-type').value;
   const amount = document.getElementById('amount').value || '0';
   const price = document.getElementById('price').value || '0';
-  const profit = document.getElementById('profit')?.value || '0';
-  const trader = document.getElementById('trader-select')?.value || 'Ebubekir';
-  const info = document.getElementById('info')?.value.trim();
-
-  let message = '';
-  if (type === 'BUY') {
-    message = `🔒 BUY: ${amount}bgl\n💥 PRICE: ${price}tl\n👤 TRADER: ${trader}`;
-  } else {
-    message = `🔒 SOLD: ${amount}bgl\n💸 PROFİT: ${profit}tl\n👤 TRADER: ${trader}`;
-  }
-
-  if (info) {
-    message += `\nℹ️ INFO: ${info}`;
-  }
-
-  return message;
-}
-
-// Live Preview Update
-function updatePreview() {
-  const previewEl = document.getElementById('message-preview');
-  if (!previewEl) return;
-  previewEl.textContent = generateFormattedMessage();
-}
-
-const TARGET_GROUP_URL = 'https://chat.whatsapp.com/DTRkY19iZklEk5ZtQv2DSH?s=cl&p=a&ilr=1';
-
-// Helper: Check if device is mobile
-function isMobileDevice() {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
-
-// Handle Form Submission (Dual Routing: WhatsApp Web for PC / Scheme for Mobile)
-async function handleSendLog(e) {
-  e.preventDefault();
-
-  const type = document.getElementById('trade-type').value;
-  const amount = document.getElementById('amount').value.trim();
-  const price = document.getElementById('price').value.trim();
-  const profit = document.getElementById('profit')?.value.trim() || '';
+  const profit = document.getElementById('profit').value || '0';
   const trader = document.getElementById('trader-select')?.value || 'Ebubekir';
   const info = document.getElementById('info').value.trim();
 
-  const formattedText = generateFormattedMessage();
-  const encodedText = encodeURIComponent(formattedText);
+  const previewEl = document.getElementById('message-preview');
+  if (!previewEl) return;
 
-  // 1. Panoya Kopyalama (Clipboard Copy)
-  let copied = false;
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(formattedText);
-      copied = true;
+  let previewText = '';
+  if (type === 'BUY') {
+    previewText = `🔒 BUY: ${amount}bgl\n💥 PRICE: ${price}tl\n👤 TRADER: ${trader}`;
+    if (info) {
+      previewText += `\nℹ️ INFO: ${info}`;
     }
-  } catch (err) {
-    console.warn('Clipboard copy failed:', err);
-  }
-
-  // 2. Akıllı Yönlendirme Linki (Smart Dual Routing)
-  const isMobile = isMobileDevice();
-  let whatsappUrl = '';
-
-  if (isMobile) {
-    // Mobil Cihazlar: api.whatsapp.com/send?text=... (Mobil WhatsApp Uygulaması)
-    whatsappUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
   } else {
-    // Masaüstü / PC: web.whatsapp.com/send?text=... (WhatsApp Web)
-    whatsappUrl = `https://web.whatsapp.com/send?text=${encodedText}`;
+    previewText = `🔒 SOLD: ${amount}bgl\n💸 PROFİT: ${profit}tl\n👤 TRADER: ${trader}`;
+    if (info) {
+      previewText += `\nℹ️ INFO: ${info}`;
+    }
   }
 
-  // 3. Yerel Geçmiş Kaydı (LocalStorage)
-  const logEntry = {
-    id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
-    timestamp: new Date().toISOString(),
-    trader: trader,
-    type: type,
-    amount: amount,
-    price: price,
-    profit: type === 'SOLD' ? profit : undefined,
-    info: info,
-    formattedText: formattedText,
-    status: 'REDIRECTED'
+  previewEl.textContent = previewText;
+}
+
+// Check WhatsApp Client Status
+async function checkStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    
+    currentStatus = data.status;
+    updateStatusUI(data);
+
+  } catch (error) {
+    console.error('Status fetch error:', error);
+    updateStatusBadge('DISCONNECTED', 'Sunucu Çevrimdışı');
+  }
+}
+
+// Update UI elements based on status payload
+function updateStatusUI(data) {
+  const { status, qr, clientInfo } = data;
+
+  const qrContainer = document.getElementById('qr-container');
+  const deviceInfo = document.getElementById('device-info');
+  const qrWrapper = document.getElementById('qrcode-canvas');
+  const qrSpinner = document.getElementById('qr-spinner');
+  const qrMessage = document.getElementById('qr-message');
+
+  switch (status) {
+    case 'INITIALIZING':
+      updateStatusBadge('INITIALIZING', 'WhatsApp Başlatılıyor...');
+      qrContainer.classList.remove('hidden');
+      deviceInfo.classList.add('hidden');
+      qrSpinner.classList.remove('hidden');
+      qrWrapper.innerHTML = '';
+      qrMessage.textContent = 'WhatsApp Web botu başlatılıyor, lütfen bekleyin...';
+      break;
+
+    case 'QR_READY':
+      updateStatusBadge('QR_READY', 'Admin QR Kod Bekleniyor');
+      qrContainer.classList.remove('hidden');
+      deviceInfo.classList.add('hidden');
+      qrSpinner.classList.add('hidden');
+      qrMessage.textContent = 'Admin: Lütfen WhatsApp mobil uygulamanızdan bu QR kodu taratın.';
+      
+      if (qr) {
+        renderQRCode(qr);
+      }
+      break;
+
+    case 'CONNECTED':
+      updateStatusBadge('CONNECTED', 'WhatsApp Bot Bağlı & Hazır');
+      qrContainer.classList.add('hidden');
+      deviceInfo.classList.remove('hidden');
+      
+      if (clientInfo) {
+        document.getElementById('device-name').textContent = clientInfo.pushname || 'Admin Oturumu';
+        document.getElementById('device-phone').textContent = clientInfo.wid ? `+${clientInfo.wid}` : 'Oturum Aktif';
+      }
+      break;
+
+    case 'DISCONNECTED':
+    default:
+      updateStatusBadge('DISCONNECTED', 'Bağlantı Kesildi');
+      qrContainer.classList.remove('hidden');
+      deviceInfo.classList.add('hidden');
+      qrSpinner.classList.add('hidden');
+      qrWrapper.innerHTML = '';
+      qrMessage.textContent = 'WhatsApp bağlantısı kopuk. Yeniden bağlanılıyor...';
+      break;
+  }
+}
+
+// Render QR Code using qrcodejs
+function renderQRCode(qrString) {
+  const qrWrapper = document.getElementById('qrcode-canvas');
+  
+  if (qrWrapper.dataset.qr === qrString) return;
+  
+  qrWrapper.innerHTML = '';
+  qrWrapper.dataset.qr = qrString;
+
+  if (typeof QRCode !== 'undefined') {
+    new QRCode(qrWrapper, {
+      text: qrString,
+      width: 180,
+      height: 180,
+      colorDark: "#0b0f17",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } else {
+    qrWrapper.textContent = 'QR kütüphanesi yüklenemedi.';
+  }
+}
+
+// Update Status Badge UI
+function updateStatusBadge(type, message) {
+  const badge = document.getElementById('status-badge');
+  const text = document.getElementById('status-text');
+
+  badge.className = 'status-badge';
+  
+  switch (type) {
+    case 'INITIALIZING':
+      badge.classList.add('status-initializing');
+      break;
+    case 'QR_READY':
+      badge.classList.add('status-qr');
+      break;
+    case 'CONNECTED':
+      badge.classList.add('status-connected');
+      break;
+    case 'DISCONNECTED':
+    default:
+      badge.classList.add('status-disconnected');
+      break;
+  }
+
+  text.textContent = message;
+}
+
+// Handle Form Submission (Send Trade Log via Server Bot)
+async function handleSendLog(e) {
+  e.preventDefault();
+
+  const btnSubmit = document.getElementById('btn-submit');
+  const alertEl = document.getElementById('form-alert');
+
+  const payload = {
+    trader: document.getElementById('trader-select')?.value || 'Ebubekir',
+    type: document.getElementById('trade-type').value,
+    amount: document.getElementById('amount').value.trim(),
+    price: document.getElementById('price').value.trim(),
+    profit: document.getElementById('profit')?.value.trim() || '',
+    info: document.getElementById('info').value.trim()
   };
 
-  saveLogEntry(logEntry);
+  btnSubmit.disabled = true;
+  btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gönderiliyor...';
+  alertEl.className = 'alert hidden';
 
-  // 4. Bildirim Gösterimi
-  const deviceTag = isMobile ? '📱 Mobil WhatsApp' : '💻 WhatsApp Web (Masaüstü)';
-  
-  if (copied) {
-    showAlert('alert-success', `
-      <i class="fa-solid fa-circle-check"></i> <strong>Mesaj kopyalandı, ${deviceTag} açılıyor...</strong><br>
-      Açılan sohbet ekranında mesaj hazır yüklenecektir veya sohbet kutusuna yapıştırabilirsiniz.
-      <div style="margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <a href="${whatsappUrl}" target="_blank" class="btn-chip chip-success"><i class="fa-brands fa-whatsapp"></i> ${isMobile ? 'WhatsApp Uygulamasında Aç' : 'WhatsApp Web\'de Aç'}</a>
-        <a href="${TARGET_GROUP_URL}" target="_blank" class="btn-chip chip-warning"><i class="fa-solid fa-users"></i> Hedef Gruba Git</a>
-      </div>
-    `);
-  } else {
-    showAlert('alert-success', `
-      <i class="fa-solid fa-circle-check"></i> <strong>${deviceTag} yönlendirmesi başlatıldı...</strong>
-      <div style="margin-top: 0.6rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <a href="${whatsappUrl}" target="_blank" class="btn-chip chip-success"><i class="fa-brands fa-whatsapp"></i> WhatsApp'ta Aç</a>
-        <a href="${TARGET_GROUP_URL}" target="_blank" class="btn-chip chip-warning"><i class="fa-solid fa-users"></i> Hedef Gruba Git</a>
-      </div>
-    `);
+  try {
+    const res = await fetch('/api/send-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      showAlert('alert-success', `<i class="fa-solid fa-circle-check"></i> Ticaret logu WhatsApp grubuna başarıyla gönderildi!`);
+      fetchLogs(); // refresh log table
+    } else {
+      showAlert('alert-error', `<i class="fa-solid fa-triangle-exclamation"></i> ${data.error}`);
+    }
+
+  } catch (err) {
+    showAlert('alert-error', `<i class="fa-solid fa-circle-xmark"></i> Sunucu ile iletişim kurulamadı: ${err.message}`);
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-paper-plane"></i> WhatsApp Grubuna Gönder';
   }
-
-  // 5. Yönlendirmeyi Tetikle
-  window.open(whatsappUrl, '_blank');
 }
 
 // Show alert message in form
@@ -179,39 +262,18 @@ function resetForm() {
   document.getElementById('form-alert').className = 'alert hidden';
 }
 
-// Load logs history from LocalStorage
-function loadLogsHistory() {
+// Fetch logs history from server
+async function fetchLogs() {
   try {
-    const stored = localStorage.getItem('bgl_logs_history');
-    if (stored) {
-      allLogs = JSON.parse(stored);
-    } else {
-      allLogs = [];
+    const res = await fetch('/api/logs');
+    const data = await res.json();
+
+    if (data.success) {
+      allLogs = data.logs;
+      renderLogsTable(allLogs);
     }
-  } catch (err) {
-    allLogs = [];
-  }
-  renderLogsTable(allLogs);
-}
-
-// Save log entry to LocalStorage
-function saveLogEntry(entry) {
-  allLogs.unshift(entry);
-  if (allLogs.length > 100) allLogs.pop(); // Keep last 100 logs
-  try {
-    localStorage.setItem('bgl_logs_history', JSON.stringify(allLogs));
-  } catch (e) {
-    console.error('LocalStorage save error:', e);
-  }
-  renderLogsTable(allLogs);
-}
-
-// Clear all history from LocalStorage
-function clearLogsHistory() {
-  if (confirm('Tüm gönderim geçmişini temizlemek istediğinize emin misiniz?')) {
-    allLogs = [];
-    localStorage.removeItem('bgl_logs_history');
-    renderLogsTable(allLogs);
+  } catch (error) {
+    console.error('Fetch logs error:', error);
   }
 }
 
@@ -265,7 +327,7 @@ function renderLogsTable(logs) {
           <pre class="details-preview">${escapeHtml(log.formattedText || '')}</pre>
         </td>
         <td>
-          <span class="badge badge-success"><i class="fa-brands fa-whatsapp"></i> WhatsApp</span>
+          <span class="badge badge-success"><i class="fa-solid fa-check-double"></i> Sent</span>
         </td>
       </tr>
     `;

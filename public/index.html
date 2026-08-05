@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="WhatsApp Deep Link tabanlı modern Log ve Bildirim Otomasyonu Paneli">
+  <meta name="description" content="WhatsApp Server-Side Bot tabanlı Log ve Bildirim Otomasyonu Paneli">
   <title>WhatsApp Log Otomasyonu | Admin Panel</title>
 
   <!-- Google Fonts & Font Awesome Icons -->
@@ -11,6 +11,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Canvas QR Code Generator Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
   <link rel="stylesheet" href="style.css">
 </head>
@@ -29,19 +32,55 @@
       </div>
       
       <!-- Connection Status Badge -->
-      <a href="https://chat.whatsapp.com/DTRkY19iZklEk5ZtQv2DSH?s=cl&p=a&ilr=1" target="_blank" id="status-badge" class="status-badge status-connected" style="text-decoration: none;">
+      <div id="status-badge" class="status-badge status-initializing">
         <span class="status-dot"></span>
-        <span id="status-text">Hedef Log Grubu Aktif</span>
-      </a>
+        <span id="status-text">Sunucuya Bağlanılıyor...</span>
+      </div>
     </header>
 
     <!-- Main Content Grid -->
     <main class="dashboard-grid">
-      <!-- BGL Trade Log Form -->
+      <!-- Left Column: Device & Connection Info (Admin QR Scan Area) -->
+      <aside class="card connection-card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-qrcode"></i> WhatsApp Bağlantı Durumu</h2>
+          <button id="btn-refresh-status" class="btn-icon" title="Yenile">
+            <i class="fa-solid fa-rotate-right"></i>
+          </button>
+        </div>
+
+        <div class="card-body">
+          <!-- QR Scanner Display Area -->
+          <div id="qr-container" class="qr-container">
+            <div id="qr-spinner" class="spinner"></div>
+            <div id="qrcode-canvas" class="qrcode-wrapper"></div>
+            <p id="qr-message" class="qr-message">QR kod yükleniyor, lütfen bekleyin...</p>
+          </div>
+
+          <!-- Connected Device Info Card -->
+          <div id="device-info" class="device-info hidden">
+            <div class="device-avatar">
+              <i class="fa-solid fa-user-check"></i>
+            </div>
+            <div class="device-details">
+              <h3 id="device-name">Admin Oturumu</h3>
+              <p id="device-phone" class="phone-number">Oturum Aktif</p>
+              <span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> Bot Aktif & Bağlı</span>
+            </div>
+          </div>
+
+          <div class="info-box">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>Log bildirimi doğrudan WhatsApp grubuna iletilir. Yalnızca Admin QR kodunu bir kez okutmalıdır.</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right Column: BGL Trade Log Form -->
       <section class="card form-card">
         <div class="card-header">
           <h2><i class="fa-solid fa-chart-line"></i> BGL Ticaret Logu Gönder</h2>
-          <a href="https://chat.whatsapp.com/DTRkY19iZklEk5ZtQv2DSH?s=cl&p=a&ilr=1" target="_blank" class="badge badge-info" style="text-decoration: none;"><i class="fa-brands fa-whatsapp"></i> Hedef Gruba Git</a>
+          <span class="badge badge-info">BGL Trade System</span>
         </div>
 
         <div class="card-body">
@@ -120,7 +159,7 @@
                 <i class="fa-solid fa-eraser"></i> Temizle
               </button>
               <button type="submit" id="btn-submit" class="btn btn-primary">
-                <i class="fa-brands fa-whatsapp"></i> WhatsApp ile Gönder
+                <i class="fa-solid fa-paper-plane"></i> WhatsApp Grubuna Gönder
               </button>
             </div>
           </form>
@@ -136,8 +175,8 @@
           <h2><i class="fa-solid fa-clock-rotate-left"></i> Gönderilen Ticaret Logları</h2>
           <div class="history-controls">
             <input type="text" id="search-log" placeholder="Loglarda ara..." oninput="filterLogs()" class="search-input">
-            <button class="btn btn-secondary btn-sm" onclick="clearLogsHistory()" title="Geçmişi Temizle">
-              <i class="fa-solid fa-trash-can"></i> Temizle
+            <button class="btn btn-secondary btn-sm" onclick="fetchLogs()">
+              <i class="fa-solid fa-arrows-rotate"></i> Yenile
             </button>
           </div>
         </div>
@@ -170,7 +209,7 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <p>WhatsApp Log Otomasyonu &copy; 2026 | Direct WhatsApp Scheme ile Güçlendirilmiştir.</p>
+      <p>WhatsApp Log Otomasyonu &copy; 2026 | Express & WhatsApp-Web.JS Server-Side Bot</p>
     </footer>
   </div>
 

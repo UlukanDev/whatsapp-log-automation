@@ -166,16 +166,19 @@ body {
 
 /* Dashboard Grid Layout */
 .dashboard-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 360px 1fr;
   gap: 1.5rem;
-  max-width: 920px;
-  margin: 0 auto;
-  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .full-width {
-  width: 100%;
+  grid-column: 1 / -1;
 }
 
 /* Card Styling */
