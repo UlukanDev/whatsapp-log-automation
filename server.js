@@ -477,6 +477,65 @@ app.post('/api/admin/update-password', (req, res) => {
   });
 });
 
+// Add New Personnel User (Admin Only)
+app.post('/api/admin/add-user', (req, res) => {
+  const { name, password, adminToken } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (authHeader !== 'Bearer admin_session_bayro3100' && adminToken !== 'admin_session_bayro3100') {
+    return res.status(403).json({ success: false, error: 'Yetkisiz admin erişimi.' });
+  }
+
+  if (!name || !password) {
+    return res.status(400).json({ success: false, error: 'Personel ismi ve şifre zorunludur.' });
+  }
+
+  const cleanName = String(name).trim();
+  const cleanPass = String(password).trim();
+  const now = new Date().toISOString();
+
+  // Check if user already exists
+  db.get(`SELECT name FROM users WHERE LOWER(name) = LOWER(?)`, [cleanName], (err, existing) => {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+    if (existing) {
+      return res.status(400).json({ success: false, error: `'${cleanName}' isimli personel zaten kayıtlı!` });
+    }
+
+    const sql = `INSERT INTO users (name, password, role, updatedAt) VALUES (?, ?, 'trader', ?)`;
+    db.run(sql, [cleanName, cleanPass, now], function(err) {
+      if (err) return res.status(500).json({ success: false, error: err.message });
+
+      console.log(`👤 [User Added] Yeni personel eklendi: ${cleanName}`);
+      res.json({ success: true, message: `'${cleanName}' isimli personel başarıyla eklendi.` });
+    });
+  });
+});
+
+// Delete Personnel User (Admin Only)
+app.post('/api/admin/delete-user', (req, res) => {
+  const { name, adminToken } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (authHeader !== 'Bearer admin_session_bayro3100' && adminToken !== 'admin_session_bayro3100') {
+    return res.status(403).json({ success: false, error: 'Yetkisiz admin erişimi.' });
+  }
+
+  if (!name) {
+    return res.status(400).json({ success: false, error: 'Silinecek personel ismi gereklidir.' });
+  }
+
+  const cleanName = String(name).trim();
+
+  const sql = `DELETE FROM users WHERE LOWER(name) = LOWER(?)`;
+  db.run(sql, [cleanName], function(err) {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+    if (this.changes === 0) return res.status(404).json({ success: false, error: 'Personel bulunamadı.' });
+
+    console.log(`🗑️ [User Deleted] Personel silindi: ${cleanName}`);
+    res.json({ success: true, message: `'${cleanName}' isimli personel sistemden kaldırıldı.` });
+  });
+});
+
 // 9. Accounting & Analytics API (Admin Only)
 app.get('/api/admin/accounting', (req, res) => {
   const authHeader = req.headers.authorization;

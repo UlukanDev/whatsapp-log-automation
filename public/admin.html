@@ -65,6 +65,36 @@
     </div>
   </div>
 
+  <!-- Add New Personnel Modal -->
+  <div id="add-user-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon"><i class="fa-solid fa-user-plus"></i></div>
+        <h2>Yeni Personel Ekle</h2>
+        <p>Sisteme yeni bir personel ve şifre tanımlayın</p>
+      </div>
+      <form id="add-user-form" onsubmit="handleAddUserSubmit(event)">
+        <div class="form-group">
+          <label for="new-user-name"><i class="fa-solid fa-user"></i> Personel İsmi</label>
+          <input type="text" id="new-user-name" placeholder="Örn: Serkan" required>
+        </div>
+        <div class="form-group">
+          <label for="new-user-pass"><i class="fa-solid fa-key"></i> Şifresi</label>
+          <input type="text" id="new-user-pass" placeholder="Örn: 1234" required>
+        </div>
+        
+        <div id="add-user-alert" class="alert hidden"></div>
+        
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeAddUserModal()">İptal</button>
+          <button type="submit" id="btn-add-user-submit" class="btn btn-primary">
+            <i class="fa-solid fa-check"></i> Kaydet & Ekle
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
@@ -165,7 +195,9 @@
         <div class="card full-width">
           <div class="card-header">
             <h2><i class="fa-solid fa-key"></i> Kayıtlı Personeller ve Şifre Yönetimi</h2>
-            <span class="badge badge-info">SQLite Persistent Storage</span>
+            <button class="btn btn-primary btn-sm" onclick="openAddUserModal()">
+              <i class="fa-solid fa-user-plus"></i> + Yeni Personel Ekle
+            </button>
           </div>
           <div class="card-body padding-0">
             <div class="table-responsive">

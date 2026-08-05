@@ -4,6 +4,7 @@ let loggedUser = localStorage.getItem('logged_user') || null;
 
 // DOM Loaded Initialization
 document.addEventListener('DOMContentLoaded', () => {
+  fetchPersonnelDropdown();
   initAuthCheck();
   checkStatus();
   fetchLogs();
@@ -15,6 +16,40 @@ document.addEventListener('DOMContentLoaded', () => {
   // Manual status refresh button
   document.getElementById('btn-refresh-status')?.addEventListener('click', checkStatus);
 });
+
+// Fetch Personnel Users from backend to dynamically populate selects
+async function fetchPersonnelDropdown() {
+  try {
+    const res = await fetch('/api/users');
+    const data = await res.json();
+    if (data.success && data.users) {
+      populateUserDropdowns(data.users);
+    }
+  } catch (err) {
+    console.error('Failed to fetch personnel dropdown users:', err);
+  }
+}
+
+function populateUserDropdowns(usersList) {
+  const modalSelect = document.getElementById('modal-personel-select');
+  const formSelect = document.getElementById('trader-select');
+
+  if (modalSelect) {
+    const currentVal = modalSelect.value;
+    modalSelect.innerHTML = '<option value="">-- Personel Seçiniz --</option>' + 
+      usersList.map(u => `<option value="${escapeHtml(u)}">👤 ${escapeHtml(u)}</option>`).join('');
+    if (currentVal) modalSelect.value = currentVal;
+  }
+
+  if (formSelect) {
+    formSelect.innerHTML = '<option value="">-- Giriş Yapınız --</option>' + 
+      usersList.map(u => `<option value="${escapeHtml(u)}">👤 ${escapeHtml(u)}</option>`).join('');
+    if (loggedUser) {
+      formSelect.value = loggedUser;
+      formSelect.disabled = true;
+    }
+  }
+}
 
 // Auth Check & Session Persistence
 function initAuthCheck() {

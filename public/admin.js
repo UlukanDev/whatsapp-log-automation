@@ -227,13 +227,105 @@ function renderPersonnelTable(users) {
         </td>
         <td style="font-size: 0.8rem; color: var(--text-muted);">${dateFormatted}</td>
         <td>
-          <button class="btn btn-sm btn-primary" onclick="openPasswordModal('${escapeHtml(u.name)}')">
-            <i class="fa-solid fa-pen-to-square"></i> Şifre Değiştir
-          </button>
+          <div style="display: flex; gap: 0.4rem; justify-content: flex-end;">
+            <button class="btn btn-sm btn-primary" onclick="openPasswordModal('${escapeHtml(u.name)}')">
+              <i class="fa-solid fa-pen-to-square"></i> Şifre Değiştir
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="handleDeleteUser('${escapeHtml(u.name)}')">
+              <i class="fa-solid fa-trash-can"></i> Sil
+            </button>
+          </div>
         </td>
       </tr>
     `;
   }).join('');
+}
+
+// Open/Close Add User Modal
+function openAddUserModal() {
+  document.getElementById('new-user-name').value = '';
+  document.getElementById('new-user-pass').value = '';
+  document.getElementById('add-user-alert').className = 'alert hidden';
+  document.getElementById('add-user-modal').classList.remove('hidden');
+}
+
+function closeAddUserModal() {
+  document.getElementById('add-user-modal').classList.add('hidden');
+}
+
+// Handle Add User Submit
+async function handleAddUserSubmit(e) {
+  e.preventDefault();
+  const name = document.getElementById('new-user-name').value.trim();
+  const password = document.getElementById('new-user-pass').value.trim();
+  const alertEl = document.getElementById('add-user-alert');
+  const btnSubmit = document.getElementById('btn-add-user-submit');
+
+  if (!name || !password) {
+    alertEl.className = 'alert alert-error';
+    alertEl.textContent = 'Personel ismi ve şifresi zorunludur.';
+    return;
+  }
+
+  btnSubmit.disabled = true;
+  btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Ekleniyor...';
+
+  try {
+    const res = await fetch('/api/admin/add-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({ name, password, adminToken })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      alertEl.className = 'alert alert-success';
+      alertEl.textContent = data.message;
+      fetchPersonnelPasswords();
+      setTimeout(closeAddUserModal, 1000);
+    } else {
+      alertEl.className = 'alert alert-error';
+      alertEl.textContent = data.error || 'Personel eklenemedi.';
+    }
+  } catch (err) {
+    alertEl.className = 'alert alert-error';
+    alertEl.textContent = 'Sunucu hatası.';
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-check"></i> Kaydet & Ekle';
+  }
+}
+
+// Handle Delete User
+async function handleDeleteUser(name) {
+  if (!confirm(`'${name}' isimli personeli sistemden silmek istediğinize emin misiniz?`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({ name, adminToken })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      fetchPersonnelPasswords();
+    } else {
+      alert(`Hata: ${data.error}`);
+    }
+  } catch (err) {
+    alert('Sunucu hatası oluştu.');
+  }
 }
 
 // Toggle password text visibility
