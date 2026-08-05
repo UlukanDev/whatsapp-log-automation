@@ -46,7 +46,7 @@ const client = new Client({
   }),
   puppeteer: {
     headless: true,
-    executablePath: getSystemChromePath(),
+    ...(process.env.PUPPETEER_EXECUTABLE_PATH ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH } : (getSystemChromePath() ? { executablePath: getSystemChromePath() } : {})),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
