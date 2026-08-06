@@ -9,13 +9,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Admin Auth Initialization
 function initAdminAuth() {
-  const modal = document.getElementById('admin-login-modal');
-  if (adminToken === 'admin_session_bayro3100') {
-    modal.classList.add('hidden');
-    fetchAccountingData();
-    fetchPersonnelPasswords();
-  } else {
-    modal.classList.remove('hidden');
+  try {
+    const modal = document.getElementById('admin-login-modal');
+    if (adminToken === 'admin_session_bayro3100') {
+      if (modal) modal.classList.add('hidden');
+      fetchAccountingData();
+      fetchPersonnelPasswords();
+    } else {
+      if (modal) modal.classList.remove('hidden');
+    }
+  } catch (err) {
+    console.error('Auth initialization error:', err);
+    document.getElementById('admin-login-modal')?.classList.remove('hidden');
   }
 }
 
@@ -26,11 +31,11 @@ async function handleAdminLogin(e) {
   const alertEl = document.getElementById('admin-login-alert');
   const btnSubmit = document.getElementById('btn-admin-login');
 
-  const password = passEl.value.trim();
+  const password = passEl ? passEl.value.trim() : '';
 
   btnSubmit.disabled = true;
   btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Doğrulanıyor...';
-  alertEl.classList.add('hidden');
+  if (alertEl) alertEl.classList.add('hidden');
 
   try {
     const res = await fetch('/api/admin/login', {
@@ -41,19 +46,23 @@ async function handleAdminLogin(e) {
 
     const data = await res.json();
 
-    if (data.success) {
+    if (data && data.success) {
       adminToken = data.token;
       sessionStorage.setItem('admin_token', adminToken);
-      document.getElementById('admin-login-modal').classList.add('hidden');
+      document.getElementById('admin-login-modal')?.classList.add('hidden');
       fetchAccountingData();
       fetchPersonnelPasswords();
     } else {
-      alertEl.textContent = data.error || 'Hatalı Admin Şifresi!';
-      alertEl.classList.remove('hidden');
+      if (alertEl) {
+        alertEl.textContent = (data && data.error) ? data.error : 'Hatalı Admin Şifresi!';
+        alertEl.classList.remove('hidden');
+      }
     }
   } catch (err) {
-    alertEl.textContent = 'Sunucuya bağlanılamadı.';
-    alertEl.classList.remove('hidden');
+    if (alertEl) {
+      alertEl.textContent = 'Sunucuya bağlanılamadı.';
+      alertEl.classList.remove('hidden');
+    }
   } finally {
     btnSubmit.disabled = false;
     btnSubmit.innerHTML = '<i class="fa-solid fa-shield-halved"></i> Panele Giriş Yap';
@@ -74,51 +83,66 @@ function switchTab(tabName) {
   const secPass = document.getElementById('section-passwords');
 
   if (tabName === 'accounting') {
-    tabAcc.classList.add('active');
-    tabPass.classList.remove('active');
-    secAcc.classList.add('active');
-    secAcc.classList.remove('hidden');
-    secPass.classList.add('hidden');
-    secPass.classList.remove('active');
+    if (tabAcc) tabAcc.classList.add('active');
+    if (tabPass) tabPass.classList.remove('active');
+    if (secAcc) { secAcc.classList.add('active'); secAcc.classList.remove('hidden'); }
+    if (secPass) { secPass.classList.add('hidden'); secPass.classList.remove('active'); }
     fetchAccountingData();
   } else {
-    tabPass.classList.add('active');
-    tabAcc.classList.remove('active');
-    secPass.classList.add('active');
-    secPass.classList.remove('hidden');
-    secAcc.classList.add('hidden');
-    secAcc.classList.remove('active');
+    if (tabPass) tabPass.classList.add('active');
+    if (tabAcc) tabAcc.classList.remove('active');
+    if (secPass) { secPass.classList.add('active'); secPass.classList.remove('hidden'); }
+    if (secAcc) { secAcc.classList.add('hidden'); secAcc.classList.remove('active'); }
     fetchPersonnelPasswords();
   }
 }
 
 // Fetch Accounting Data & Logs History from Backend API
 async function fetchAccountingData() {
-  if (!adminToken) return;
+  if (!adminToken) {
+    document.getElementById('admin-login-modal')?.classList.remove('hidden');
+    return;
+  }
 
   try {
     const [accRes, logsRes] = await Promise.all([
       fetch('/api/admin/accounting', {
         headers: { 'Authorization': `Bearer ${adminToken}` }
-      }),
-      fetch('/api/logs')
+      }).catch(e => ({ ok: false, status: 500 })),
+      fetch('/api/logs').catch(e => ({ ok: false, status: 500 }))
     ]);
 
-    const accData = await accRes.json();
-    const logsData = await logsRes.json();
-
-    if (accData.success) {
-      renderAccountingSummary(accData.summary);
-      renderAdminBreakdown(accData.adminBreakdown, accData.summary.totalTrades);
+    if (accRes.status === 401 || accRes.status === 403) {
+      sessionStorage.removeItem('admin_token');
+      adminToken = null;
+      document.getElementById('admin-login-modal')?.classList.remove('hidden');
+      return;
     }
 
-    if (logsData.success) {
+    const accData = accRes.ok ? await accRes.json().catch(() => null) : null;
+    const logsData = logsRes.ok ? await logsRes.json().catch(() => null) : null;
+
+    if (accData && accData.success) {
+      renderAccountingSummary(accData.summary);
+      renderAdminBreakdown(accData.adminBreakdown, accData.summary.totalTrades);
+    } else {
+      renderAccountingSummary({ totalBuyAmount: 0, totalBuyPrice: 0, totalSoldAmount: 0, totalSoldPrice: 0, totalProfit: 0, totalTrades: 0 });
+      renderAdminBreakdown([], 0);
+    }
+
+    if (logsData && logsData.success) {
       allLogs = logsData.logs || [];
       populateTraderFilterDropdown(allLogs);
+      renderLogsTable();
+    } else {
+      allLogs = [];
       renderLogsTable();
     }
   } catch (err) {
     console.error('Accounting data fetch error:', err);
+    renderAccountingSummary({ totalBuyAmount: 0, totalBuyPrice: 0, totalSoldAmount: 0, totalSoldPrice: 0, totalProfit: 0, totalTrades: 0 });
+    renderAdminBreakdown([], 0);
+    renderLogsTable();
   }
 }
 
@@ -446,16 +470,26 @@ async function fetchPersonnelPasswords() {
   try {
     const res = await fetch('/api/admin/users', {
       headers: { 'Authorization': `Bearer ${adminToken}` }
-    });
+    }).catch(e => ({ ok: false, status: 500 }));
 
-    const data = await res.json();
+    if (res.status === 401 || res.status === 403) {
+      sessionStorage.removeItem('admin_token');
+      adminToken = null;
+      document.getElementById('admin-login-modal')?.classList.remove('hidden');
+      return;
+    }
 
-    if (data.success) {
-      allPersonnel = data.users;
+    const data = res.ok ? await res.json().catch(() => null) : null;
+
+    if (data && data.success) {
+      allPersonnel = data.users || [];
       renderPersonnelTable(allPersonnel);
+    } else {
+      renderPersonnelTable([]);
     }
   } catch (err) {
     console.error('Personnel fetch error:', err);
+    renderPersonnelTable([]);
   }
 }
 
