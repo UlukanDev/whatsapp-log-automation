@@ -172,6 +172,14 @@ function setTradeType(type) {
   const hiddenInput = document.getElementById('trade-type');
   const btnBuy = document.getElementById('btn-type-buy');
   const btnSold = document.getElementById('btn-type-sold');
+  
+  const priceGroup = document.getElementById('price-group');
+  const priceInput = document.getElementById('price');
+  
+  const soldRow = document.getElementById('sold-mode-row');
+  const buyPriceInput = document.getElementById('buyPrice');
+  const sellPriceInput = document.getElementById('sellPrice');
+  
   const profitGroup = document.getElementById('profit-group');
 
   hiddenInput.value = type;
@@ -179,12 +187,50 @@ function setTradeType(type) {
   if (type === 'BUY') {
     btnBuy.className = 'type-btn active-buy';
     btnSold.className = 'type-btn';
+    
+    priceGroup.classList.remove('hidden');
+    priceInput.required = true;
+    
+    soldRow.classList.add('hidden');
+    buyPriceInput.required = false;
+    sellPriceInput.required = false;
+    
     profitGroup.classList.add('hidden');
     document.getElementById('profit').value = '';
   } else {
     btnBuy.className = 'type-btn';
     btnSold.className = 'type-btn active-sold';
+    
+    priceGroup.classList.add('hidden');
+    priceInput.required = false;
+    
+    soldRow.classList.remove('hidden');
+    buyPriceInput.required = true;
+    sellPriceInput.required = true;
+    
     profitGroup.classList.remove('hidden');
+    calculateProfit();
+  }
+
+  updatePreview();
+}
+
+// Automatic Profit Calculator for SOLD mode: (Satış Fiyatı - Alış Fiyatı) * Miktar
+function calculateProfit() {
+  const type = document.getElementById('trade-type').value;
+  if (type !== 'SOLD') return;
+
+  const amount = parseFloat(document.getElementById('amount').value);
+  const buyPrice = parseFloat(document.getElementById('buyPrice').value);
+  const sellPrice = parseFloat(document.getElementById('sellPrice').value);
+
+  const profitInput = document.getElementById('profit');
+
+  if (!isNaN(amount) && !isNaN(buyPrice) && !isNaN(sellPrice) && amount > 0) {
+    const totalProfit = (sellPrice - buyPrice) * amount;
+    profitInput.value = Number(totalProfit.toFixed(2));
+  } else {
+    profitInput.value = '';
   }
 
   updatePreview();
@@ -352,11 +398,19 @@ async function handleSendLog(e) {
     return;
   }
 
+  const type = document.getElementById('trade-type').value;
+  let priceVal = '';
+  if (type === 'BUY') {
+    priceVal = document.getElementById('price').value.trim();
+  } else {
+    priceVal = document.getElementById('sellPrice').value.trim() || document.getElementById('price').value.trim();
+  }
+
   const payload = {
     trader: loggedUser,
-    type: document.getElementById('trade-type').value,
+    type,
     amount: document.getElementById('amount').value.trim(),
-    price: document.getElementById('price').value.trim(),
+    price: priceVal,
     profit: document.getElementById('profit')?.value.trim() || '',
     info: document.getElementById('info').value.trim()
   };

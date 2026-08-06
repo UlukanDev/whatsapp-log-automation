@@ -26,7 +26,7 @@
         <h2>Personel Girişi</h2>
         <p>BGL Ticaret Sistemine Erişmek İçin Giriş Yapın</p>
       </div>
-      <form id="login-form" onsubmit="handleLoginSubmit(event)">
+      <form id="login-form" onsubmit="handleLoginSubmit(event)" autocomplete="off" autocorrect="off">
         <div class="form-group">
           <label for="modal-personel-select"><i class="fa-solid fa-user-tag"></i> Personel Seçiniz</label>
           <select id="modal-personel-select" required>
@@ -42,7 +42,7 @@
         </div>
         <div class="form-group">
           <label for="modal-password"><i class="fa-solid fa-key"></i> Şifreniz</label>
-          <input type="password" id="modal-password" placeholder="Şifrenizi giriniz" required autocomplete="current-password">
+          <input type="password" id="modal-password" placeholder="Şifrenizi giriniz" required autocomplete="off" autocorrect="off">
         </div>
         
         <div id="login-alert" class="alert alert-error hidden"></div>
@@ -131,7 +131,7 @@
         </div>
 
         <div class="card-body">
-          <form id="log-form" onsubmit="handleSendLog(event)">
+          <form id="log-form" onsubmit="handleSendLog(event)" autocomplete="off" autocorrect="off">
             <!-- 0. İşlemi Yapan Personel (Trader) -->
             <div class="form-group">
               <label for="trader-select"><i class="fa-solid fa-user-tag"></i> İşlemi Yapan Personel (Admin)</label>
@@ -161,30 +161,50 @@
               <input type="hidden" id="trade-type" value="BUY">
             </div>
 
-            <!-- 3. Miktar (bgl) & Fiyat (tl) -->
-            <div class="form-row">
+            <!-- 3. Miktar (bgl) & Fiyat (tl) / Alış & Satış Fiyatları -->
+            <!-- BUY Mode: Standart Miktar & Fiyat Alanı -->
+            <div id="buy-mode-row" class="form-row">
               <div class="form-group flex-1">
                 <label for="amount"><i class="fa-solid fa-coins"></i> Miktar (bgl)</label>
                 <div class="input-with-unit">
-                  <input type="number" step="any" id="amount" placeholder="Örn: 100" required oninput="updatePreview()">
+                  <input type="number" step="any" id="amount" placeholder="Örn: 100" required oninput="calculateProfit(); updatePreview();" autocomplete="off" autocorrect="off">
                   <span class="unit-badge">bgl</span>
                 </div>
               </div>
 
-              <div class="form-group flex-1">
+              <div id="price-group" class="form-group flex-1">
                 <label for="price"><i class="fa-solid fa-money-bill-wave"></i> Fiyat (tl)</label>
                 <div class="input-with-unit">
-                  <input type="number" step="any" id="price" placeholder="Örn: 500" required oninput="updatePreview()">
+                  <input type="number" step="any" id="price" placeholder="Örn: 500" required oninput="updatePreview()" autocomplete="off" autocorrect="off">
                   <span class="unit-badge">tl</span>
                 </div>
               </div>
             </div>
 
-            <!-- 4. Kâr / Profit (tl) (Sadece SOLD seçildiğinde görünür) -->
+            <!-- SOLD Mode: Yan Yana Alış Fiyatı & Satış Fiyatı -->
+            <div id="sold-mode-row" class="form-row hidden">
+              <div class="form-group flex-1">
+                <label for="buyPrice"><i class="fa-solid fa-cart-shopping"></i> Alış Fiyatı (TL)</label>
+                <div class="input-with-unit">
+                  <input type="number" step="any" id="buyPrice" placeholder="Örn: 80" oninput="calculateProfit()" autocomplete="off" autocorrect="off">
+                  <span class="unit-badge">tl</span>
+                </div>
+              </div>
+
+              <div class="form-group flex-1">
+                <label for="sellPrice"><i class="fa-solid fa-cash-register"></i> Satış Fiyatı (TL)</label>
+                <div class="input-with-unit">
+                  <input type="number" step="any" id="sellPrice" placeholder="Örn: 90" oninput="calculateProfit()" autocomplete="off" autocorrect="off">
+                  <span class="unit-badge">tl</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Kâr / Profit (tl) (Sadece SOLD seçildiğinde otomatik hesaplanan alan) -->
             <div id="profit-group" class="form-group hidden">
               <label for="profit"><i class="fa-solid fa-hand-holding-dollar"></i> Kâr / Profit (tl)</label>
               <div class="input-with-unit">
-                <input type="number" step="any" id="profit" placeholder="Örn: 150" oninput="updatePreview()">
+                <input type="number" step="any" id="profit" placeholder="Otomatik hesaplanır (Örn: 100)" readonly oninput="updatePreview()" autocomplete="off" autocorrect="off" style="background: rgba(16, 185, 129, 0.1); color: #34d399; font-weight: 600;">
                 <span class="unit-badge">tl</span>
               </div>
             </div>
@@ -192,7 +212,7 @@
             <!-- 5. Info / Not -->
             <div class="form-group">
               <label for="info"><i class="fa-solid fa-note-sticky"></i> Info / Not</label>
-              <input type="text" id="info" placeholder="Örn: 31 54" oninput="updatePreview()">
+              <input type="text" id="info" placeholder="Örn: 31 54" oninput="updatePreview()" autocomplete="off" autocorrect="off">
             </div>
 
             <!-- Live Preview Card -->
@@ -223,7 +243,7 @@
         <div class="card-header">
           <h2><i class="fa-solid fa-clock-rotate-left"></i> Gönderilen Ticaret Logları</h2>
           <div class="history-controls">
-            <input type="text" id="search-log" placeholder="Loglarda ara..." oninput="filterLogs()" class="search-input">
+            <input type="text" id="search-log" placeholder="Loglarda ara..." oninput="filterLogs()" class="search-input" autocomplete="off" autocorrect="off">
             <button class="btn btn-secondary btn-sm" onclick="fetchLogs()">
               <i class="fa-solid fa-arrows-rotate"></i> Yenile
             </button>
