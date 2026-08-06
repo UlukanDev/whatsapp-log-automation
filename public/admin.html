@@ -93,6 +93,55 @@
         </div>
       </form>
     </div>
+  <!-- Edit Log Modal -->
+  <div id="edit-log-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon gold-icon"><i class="fa-solid fa-pen-to-square"></i></div>
+        <h2>Log Kaydını Düzenle</h2>
+        <p><strong id="modal-edit-log-trader">Personel</strong> log bilgilerini güncelleyin</p>
+      </div>
+      <form id="edit-log-form" onsubmit="handleEditLogSubmit(event)">
+        <input type="hidden" id="edit-log-id">
+        
+        <div class="form-group">
+          <label for="edit-log-type"><i class="fa-solid fa-right-left"></i> İşlem Tipi</label>
+          <select id="edit-log-type" style="padding: 0.75rem; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--card-border); border-radius: var(--radius-sm); outline: none; width: 100%;" onchange="toggleEditLogTypeFields()">
+            <option value="BUY">BUY (Alış)</option>
+            <option value="SOLD">SOLD (Satış)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-log-amount"><i class="fa-solid fa-coins"></i> Miktar (bgl)</label>
+          <input type="number" step="any" id="edit-log-amount" placeholder="Örn: 1000" required>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-log-price"><i class="fa-solid fa-turkish-lira-sign"></i> Fiyat (TL)</label>
+          <input type="number" step="any" id="edit-log-price" placeholder="Örn: 5000" required>
+        </div>
+
+        <div class="form-group hidden" id="edit-log-profit-group">
+          <label for="edit-log-profit"><i class="fa-solid fa-hand-holding-dollar"></i> Kâr / Profit (TL)</label>
+          <input type="number" step="any" id="edit-log-profit" placeholder="Örn: 150">
+        </div>
+
+        <div class="form-group">
+          <label for="edit-log-info"><i class="fa-solid fa-circle-info"></i> Not / Bilgi</label>
+          <input type="text" id="edit-log-info" placeholder="İşlem notu (isteğe bağlı)">
+        </div>
+        
+        <div id="edit-log-alert" class="alert hidden"></div>
+        
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeEditLogModal()">İptal</button>
+          <button type="submit" id="btn-edit-log-submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> Güncelle & Kaydet
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <div class="app-container">
@@ -182,6 +231,46 @@
                 <tbody id="accounting-tbody">
                   <tr>
                     <td colspan="6" class="text-center empty-state">Veriler yükleniyor...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1 Part 2: Detailed Accounting Logs Table -->
+        <div class="card full-width margin-top-15" id="logs-table-card">
+          <div class="card-header" style="flex-wrap: wrap; gap: 0.8rem; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
+              <h2><i class="fa-solid fa-list-check"></i> Genel Muhasebe Logları</h2>
+              <span id="active-log-filter-badge" class="badge badge-info hidden"></span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
+              <select id="log-filter-trader" onchange="handleTraderFilterChange()" style="padding: 0.45rem 0.8rem; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--card-border); border-radius: var(--radius-sm); outline: none; cursor: pointer;">
+                <option value="ALL">👥 Tüm Personeller (Tümü)</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="fetchAccountingData()">
+                <i class="fa-solid fa-rotate"></i> Logları Yenile
+              </button>
+            </div>
+          </div>
+          <div class="card-body padding-0">
+            <div class="table-responsive">
+              <table class="log-table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>Personel (Admin)</th>
+                    <th>İşlem Tipi</th>
+                    <th>Miktar</th>
+                    <th>Fiyat / Kâr</th>
+                    <th>Not / Info</th>
+                    <th style="text-align: right;">İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody id="logs-tbody">
+                  <tr>
+                    <td colspan="7" class="text-center empty-state">Log verileri yükleniyor...</td>
                   </tr>
                 </tbody>
               </table>

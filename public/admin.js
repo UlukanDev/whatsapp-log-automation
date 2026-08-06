@@ -1,5 +1,7 @@
 let adminToken = sessionStorage.getItem('admin_token') || null;
 let allPersonnel = [];
+let allLogs = [];
+let selectedTraderFilter = 'ALL';
 
 document.addEventListener('DOMContentLoaded', () => {
   initAdminAuth();
@@ -90,23 +92,82 @@ function switchTab(tabName) {
   }
 }
 
-// Fetch Accounting Data from Backend API
+// Fetch Accounting Data & Logs History from Backend API
 async function fetchAccountingData() {
   if (!adminToken) return;
 
   try {
-    const res = await fetch('/api/admin/accounting', {
-      headers: { 'Authorization': `Bearer ${adminToken}` }
-    });
+    const [accRes, logsRes] = await Promise.all([
+      fetch('/api/admin/accounting', {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      }),
+      fetch('/api/logs')
+    ]);
 
-    const data = await res.json();
+    const accData = await accRes.json();
+    const logsData = await logsRes.json();
 
-    if (data.success) {
-      renderAccountingSummary(data.summary);
-      renderAdminBreakdown(data.adminBreakdown, data.summary.totalTrades);
+    if (accData.success) {
+      renderAccountingSummary(accData.summary);
+      renderAdminBreakdown(accData.adminBreakdown, accData.summary.totalTrades);
+    }
+
+    if (logsData.success) {
+      allLogs = logsData.logs || [];
+      populateTraderFilterDropdown(allLogs);
+      renderLogsTable();
     }
   } catch (err) {
     console.error('Accounting data fetch error:', err);
+  }
+}
+
+// Populate Personnel Filter Dropdown
+function populateTraderFilterDropdown(logs) {
+  const selectEl = document.getElementById('log-filter-trader');
+  if (!selectEl) return;
+
+  const currentVal = selectEl.value || selectedTraderFilter || 'ALL';
+
+  const traderSet = new Set();
+  logs.forEach(l => {
+    if (l.trader && l.trader.trim()) {
+      traderSet.add(l.trader.trim());
+    }
+  });
+
+  const traders = Array.from(traderSet).sort();
+
+  let html = `<option value="ALL">👥 Tüm Personeller (Tümü)</option>`;
+  traders.forEach(t => {
+    html += `<option value="${escapeHtml(t)}">👤 ${escapeHtml(t)}</option>`;
+  });
+
+  selectEl.innerHTML = html;
+  selectEl.value = traders.includes(currentVal) ? currentVal : 'ALL';
+  selectedTraderFilter = selectEl.value;
+}
+
+// Handle Trader Filter Select Change
+function handleTraderFilterChange() {
+  const selectEl = document.getElementById('log-filter-trader');
+  selectedTraderFilter = selectEl.value;
+  renderLogsTable();
+}
+
+// Filter Logs By Specific Trader
+function filterLogsByTrader(traderName) {
+  selectedTraderFilter = traderName;
+  const selectEl = document.getElementById('log-filter-trader');
+  if (selectEl) {
+    selectEl.value = traderName;
+  }
+  renderLogsTable();
+
+  // Scroll to logs table
+  const logsCard = document.getElementById('logs-table-card');
+  if (logsCard) {
+    logsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
 
@@ -147,7 +208,7 @@ function renderAdminBreakdown(breakdown, totalTradesCount) {
       : `<span class="badge badge-success" style="font-size: 0.85rem;"><i class="fa-solid fa-arrow-trend-up"></i> ${formatNumber(stockVal)} bgl</span>`;
 
     return `
-      <tr>
+      <tr style="cursor: pointer;" onclick="filterLogsByTrader('${escapeHtml(item.trader)}')" title="Tıkla ve ${escapeHtml(item.trader)} loglarını filtrele">
         <td style="font-weight: 600; color: #60a5fa;">
           <i class="fa-solid fa-user-tie"></i> ${escapeHtml(item.trader)}
         </td>
@@ -172,6 +233,210 @@ function renderAdminBreakdown(breakdown, totalTradesCount) {
       </tr>
     `;
   }).join('');
+}
+
+// Render Accounting Logs Table
+function renderLogsTable() {
+  const tbody = document.getElementById('logs-tbody');
+  const badgeEl = document.getElementById('active-log-filter-badge');
+
+  if (!tbody) return;
+
+  const filteredLogs = selectedTraderFilter === 'ALL'
+    ? allLogs
+    : allLogs.filter(l => (l.trader || '').trim().toLowerCase() === selectedTraderFilter.trim().toLowerCase());
+
+  if (badgeEl) {
+    if (selectedTraderFilter !== 'ALL') {
+      badgeEl.textContent = `Filtre: ${selectedTraderFilter}`;
+      badgeEl.classList.remove('hidden');
+    } else {
+      badgeEl.classList.add('hidden');
+    }
+  }
+
+  if (!filteredLogs || filteredLogs.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center empty-state">İşlem logu bulunamadı.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = filteredLogs.map(log => {
+    const isBuy = (log.type || 'BUY').toUpperCase() === 'BUY';
+    const typeBadge = isBuy
+      ? `<span class="badge badge-success" style="font-size: 0.8rem;"><i class="fa-solid fa-cart-shopping"></i> BUY</span>`
+      : `<span class="badge badge-warning" style="font-size: 0.8rem; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);"><i class="fa-solid fa-cash-register"></i> SOLD</span>`;
+
+    const dateFormatted = log.timestamp ? new Date(log.timestamp).toLocaleString('tr-TR') : '-';
+    
+    let priceProfitText = '';
+    if (isBuy) {
+      priceProfitText = `<span>${formatNumber(log.price)} TL</span>`;
+    } else {
+      const prft = parseFloat(log.profit) || 0;
+      priceProfitText = `<span style="color: ${prft >= 0 ? '#34d399' : '#f87171'}; font-weight: 600;">Kâr: ${prft >= 0 ? '+' : ''}${formatNumber(prft)} TL</span>`;
+    }
+
+    return `
+      <tr>
+        <td style="font-size: 0.82rem; color: var(--text-muted); font-family: var(--font-mono);">
+          ${dateFormatted}
+        </td>
+        <td style="font-weight: 600; color: #60a5fa;">
+          <i class="fa-solid fa-user-tie"></i> ${escapeHtml(log.trader || 'Ulukan')}
+        </td>
+        <td>
+          ${typeBadge}
+        </td>
+        <td style="font-weight: 600;">
+          ${formatNumber(log.amount)} bgl
+        </td>
+        <td>
+          ${priceProfitText}
+        </td>
+        <td style="font-size: 0.85rem; color: var(--text-muted); max-width: 200px; word-break: break-word;">
+          ${escapeHtml(log.info || '-')}
+        </td>
+        <td style="text-align: right;">
+          <div style="display: flex; gap: 0.4rem; justify-content: flex-end;">
+            <button class="btn btn-sm btn-primary" onclick="openEditLogModal('${escapeHtml(log.id)}')" title="Düzenle">
+              ✏️ Düzenle
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="handleDeleteLog('${escapeHtml(log.id)}')" title="Sil">
+              🗑️ Sil
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Toggle Profit field visibility in Edit Log Modal
+function toggleEditLogTypeFields() {
+  const type = document.getElementById('edit-log-type').value;
+  const profitGroup = document.getElementById('edit-log-profit-group');
+  if (type === 'SOLD') {
+    profitGroup.classList.remove('hidden');
+  } else {
+    profitGroup.classList.add('hidden');
+  }
+}
+
+// Open Edit Log Modal
+function openEditLogModal(logId) {
+  const log = allLogs.find(l => String(l.id) === String(logId));
+  if (!log) {
+    alert('Log kaydı bulunamadı.');
+    return;
+  }
+
+  document.getElementById('edit-log-id').value = log.id;
+  document.getElementById('modal-edit-log-trader').textContent = log.trader || 'Personel';
+  document.getElementById('edit-log-type').value = (log.type || 'BUY').toUpperCase();
+  document.getElementById('edit-log-amount').value = log.amount || '';
+  document.getElementById('edit-log-price').value = log.price || '';
+  document.getElementById('edit-log-profit').value = log.profit || '';
+  document.getElementById('edit-log-info').value = log.info || '';
+
+  toggleEditLogTypeFields();
+
+  const alertEl = document.getElementById('edit-log-alert');
+  alertEl.className = 'alert hidden';
+  document.getElementById('edit-log-modal').classList.remove('hidden');
+}
+
+// Close Edit Log Modal
+function closeEditLogModal() {
+  document.getElementById('edit-log-modal').classList.add('hidden');
+}
+
+// Handle Edit Log Form Submit
+async function handleEditLogSubmit(e) {
+  e.preventDefault();
+  const id = document.getElementById('edit-log-id').value;
+  const type = document.getElementById('edit-log-type').value;
+  const amount = document.getElementById('edit-log-amount').value;
+  const price = document.getElementById('edit-log-price').value;
+  const profit = document.getElementById('edit-log-profit').value;
+  const info = document.getElementById('edit-log-info').value.trim();
+
+  const alertEl = document.getElementById('edit-log-alert');
+  const btnSubmit = document.getElementById('btn-edit-log-submit');
+
+  btnSubmit.disabled = true;
+  btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Kaydediliyor...';
+
+  try {
+    const res = await fetch('/api/admin/edit-log', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        id,
+        type,
+        amount,
+        price,
+        profit,
+        info,
+        adminToken
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      alertEl.className = 'alert alert-success';
+      alertEl.textContent = data.message;
+      fetchAccountingData();
+      setTimeout(closeEditLogModal, 800);
+    } else {
+      alertEl.className = 'alert alert-error';
+      alertEl.textContent = data.error || 'Log güncellenemedi.';
+    }
+  } catch (err) {
+    alertEl.className = 'alert alert-error';
+    alertEl.textContent = 'Sunucu hatası oluştu.';
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Güncelle & Kaydet';
+  }
+}
+
+// Handle Delete Log Entry
+async function handleDeleteLog(logId) {
+  if (!confirm("Bu log kaydını silmek istediğinize emin misiniz? Muhasebe ve stok verileri güncellenecektir.")) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/delete-log', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        id: logId,
+        adminToken
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      fetchAccountingData();
+    } else {
+      alert(`Hata: ${data.error}`);
+    }
+  } catch (err) {
+    alert('Sunucu hatası oluştu.');
+  }
 }
 
 // Fetch Personnel Passwords from Backend API

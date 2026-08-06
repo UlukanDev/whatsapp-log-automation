@@ -536,6 +536,91 @@ app.post('/api/admin/delete-user', (req, res) => {
   });
 });
 
+// Edit Log Entry (Admin Only)
+app.post('/api/admin/edit-log', (req, res) => {
+  const { id, amount, price, profit, type, info, adminToken } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (authHeader !== 'Bearer admin_session_bayro3100' && adminToken !== 'admin_session_bayro3100' && req.query.adminKey !== 'bayro3100') {
+    return res.status(403).json({ success: false, error: 'Yetkisiz admin erişimi.' });
+  }
+
+  if (!id) {
+    return res.status(400).json({ success: false, error: 'Log ID gereklidir.' });
+  }
+
+  db.get(`SELECT * FROM logs WHERE id = ?`, [String(id)], (err, log) => {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+    if (!log) return res.status(404).json({ success: false, error: 'Log kaydı bulunamadı.' });
+
+    const newType = String(type || log.type).toUpperCase();
+    const newAmount = String(amount !== undefined ? amount : log.amount);
+    const newPrice = String(price !== undefined ? price : log.price);
+    const newProfit = newType === 'SOLD' ? (profit !== undefined && profit !== null ? String(profit) : (log.profit || '0')) : null;
+    const newInfo = info !== undefined ? String(info) : (log.info || '');
+
+    const newFormattedText = formatTradeLogMessage({
+      type: newType,
+      amount: newAmount,
+      price: newPrice,
+      profit: newProfit,
+      info: newInfo,
+      trader: log.trader
+    });
+
+    const sql = `
+      UPDATE logs 
+      SET type = ?, amount = ?, price = ?, profit = ?, info = ?, formattedText = ?
+      WHERE id = ?
+    `;
+
+    db.run(sql, [newType, newAmount, newPrice, newProfit, newInfo, newFormattedText, String(id)], function(err) {
+      if (err) return res.status(500).json({ success: false, error: err.message });
+
+      const memoryIdx = logsHistory.findIndex(l => l.id === id);
+      if (memoryIdx !== -1) {
+        logsHistory[memoryIdx].type = newType;
+        logsHistory[memoryIdx].amount = newAmount;
+        logsHistory[memoryIdx].price = newPrice;
+        logsHistory[memoryIdx].profit = newProfit;
+        logsHistory[memoryIdx].info = newInfo;
+        logsHistory[memoryIdx].formattedText = newFormattedText;
+      }
+
+      console.log(`✏️ [Log Edit] Log ID ${id} (${log.trader}) güncellendi: [${newType}] ${newAmount}bgl`);
+      res.json({ success: true, message: 'Log kaydı başarıyla güncellendi.' });
+    });
+  });
+});
+
+// Delete Log Entry (Admin Only)
+app.post('/api/admin/delete-log', (req, res) => {
+  const { id, adminToken } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (authHeader !== 'Bearer admin_session_bayro3100' && adminToken !== 'admin_session_bayro3100' && req.query.adminKey !== 'bayro3100') {
+    return res.status(403).json({ success: false, error: 'Yetkisiz admin erişimi.' });
+  }
+
+  if (!id) {
+    return res.status(400).json({ success: false, error: 'Silinecek log ID gereklidir.' });
+  }
+
+  const sql = `DELETE FROM logs WHERE id = ?`;
+  db.run(sql, [String(id)], function(err) {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+    if (this.changes === 0) return res.status(404).json({ success: false, error: 'Log kaydı bulunamadı.' });
+
+    const memoryIdx = logsHistory.findIndex(l => l.id === id);
+    if (memoryIdx !== -1) {
+      logsHistory.splice(memoryIdx, 1);
+    }
+
+    console.log(`🗑️ [Log Delete] Log ID ${id} veritabanından silindi.`);
+    res.json({ success: true, message: 'Log kaydı başarıyla silindi.' });
+  });
+});
+
 // 9. Accounting & Analytics API (Admin Only)
 app.get('/api/admin/accounting', (req, res) => {
   const authHeader = req.headers.authorization;
