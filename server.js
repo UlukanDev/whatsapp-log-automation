@@ -1,14 +1,19 @@
 const path = require('path');
-process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || path.resolve(__dirname, '.cache/puppeteer');
-
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
-const puppeteer = require('puppeteer');
+const QRCode = require('qrcode');
 const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
+const pino = require('pino');
+
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion
+} = require('@whiskeysockets/baileys');
 
 dotenv.config();
 
@@ -25,10 +30,11 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// WhatsApp Client State
+// WhatsApp Client State (Baileys)
 let clientStatus = 'INITIALIZING'; // INITIALIZING, QR_READY, CONNECTED, DISCONNECTED
 let currentQr = null;
 let clientInfo = null;
+let waSock = null;
 const logsHistory = [];
 const TARGET_GROUP_ID = process.env.TARGET_GROUP_ID || '120363288734876760@g.us';
 
@@ -141,151 +147,114 @@ function getLogsFromDb() {
   });
 }
 
-// Helper: Auto-detect system Chrome / Edge executable on Windows or fallback to Puppeteer Chromium
-function getSystemChromePath() {
-  const paths = [
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
-  ];
-  for (const p of paths) {
-    if (fs.existsSync(p)) return p;
-  }
+// Baileys Session Auth Storage Directory
+const authDir = path.join(__dirname, 'data', 'auth_info_baileys');
+if (!fs.existsSync(authDir)) {
+  fs.mkdirSync(authDir, { recursive: true });
+}
+
+// Baileys Connection Setup
+async function startBaileys() {
   try {
-    return puppeteer.executablePath();
-  } catch (e) {
-    return undefined;
+    const { state, saveCreds } = await useMultiFileAuthState(authDir);
+    const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1015901307] }));
+
+    console.log(`📱 [Baileys Engine] WebSocket tabanlı WhatsApp başlatılıyor (v${version.join('.')})...`);
+
+    const sock = makeWASocket({
+      version,
+      auth: state,
+      printQRInTerminal: false,
+      logger: pino({ level: 'silent' }),
+      browser: ['BGL Trade System', 'Chrome', '1.0.0']
+    });
+
+    waSock = sock;
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      if (qr) {
+        clientStatus = 'QR_READY';
+        currentQr = qr;
+        console.log('\n========================================');
+        console.log(' 📱 [Baileys WhatsApp Bot] Yeni QR Kod Üretildi:');
+        qrcodeTerminal.generate(qr, { small: true });
+        console.log('========================================\n');
+      }
+
+      if (connection === 'close') {
+        clientStatus = 'DISCONNECTED';
+        currentQr = null;
+        clientInfo = null;
+
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+        console.log(`🟡 [Baileys WhatsApp] Bağlantı kesildi (Status: ${statusCode || 'Unknown'}). Yeniden bağlanılıyor mu: ${shouldReconnect}`);
+
+        if (shouldReconnect) {
+          setTimeout(() => {
+            startBaileys().catch(err => console.error('Baileys Yeniden Başlatma Hatası:', err));
+          }, 3000);
+        } else {
+          console.log('🔴 [Baileys WhatsApp] Oturum kapatıldı (Logged Out). Kimlik verileri temizleniyor...');
+          try {
+            fs.rmSync(authDir, { recursive: true, force: true });
+            fs.mkdirSync(authDir, { recursive: true });
+          } catch (e) {}
+          setTimeout(() => {
+            startBaileys().catch(err => console.error('Baileys Yeniden Başlatma Hatası:', err));
+          }, 3000);
+        }
+      } else if (connection === 'open') {
+        clientStatus = 'CONNECTED';
+        currentQr = null;
+        const userJid = sock.user?.id ? sock.user.id.split(':')[0] : 'Admin';
+        clientInfo = {
+          pushname: sock.user?.name || sock.user?.notify || 'BGL Admin',
+          wid: userJid,
+          platform: 'Baileys Multi-Device WebSocket'
+        };
+
+        console.log('🟢 [Baileys WhatsApp] Başarıyla bağlandı! Işık hızında WhatsApp Bot aktif.');
+        console.log(`🎯 [Hedef Log Grubu]: \x1b[32m${TARGET_GROUP_ID}\x1b[0m\n`);
+      }
+    });
+
+    sock.ev.on('messages.upsert', async (m) => {
+      try {
+        if (!m.messages || !m.messages.length) return;
+        const msg = m.messages[0];
+        if (!msg.message) return;
+
+        const remoteJid = msg.key.remoteJid;
+
+        if (remoteJid === TARGET_GROUP_ID) {
+          const isOutgoing = msg.key.fromMe;
+          const typeTag = isOutgoing ? '\x1b[33m📤 [Giden Mesaj]\x1b[0m' : '\x1b[36m📩 [Gelen Mesaj]\x1b[0m';
+          const content = msg.message.conversation || msg.message.extendedTextMessage?.text || '[Medya/İçerik]';
+
+          console.log(`${typeTag} \x1b[1mSohbet ID:\x1b[0m \x1b[32m${remoteJid}\x1b[0m | \x1b[1mİçerik:\x1b[0m ${content}`);
+        }
+      } catch (err) {
+        console.error('⚠️ [Baileys Mesaj İşleme Hatası]:', err.message);
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ [Baileys Başlatma Hatası]:', err);
+    clientStatus = 'DISCONNECTED';
+    setTimeout(() => {
+      startBaileys().catch(e => console.error(e));
+    }, 5000);
   }
 }
 
-// Initialize WhatsApp Web JS Client
-const client = new Client({
-  authStrategy: new LocalAuth({
-    dataPath: '.wwebjs_auth'
-  }),
-  puppeteer: {
-    headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || getSystemChromePath(),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--disable-gpu',
-      '--disable-extensions',
-      '--disable-component-extensions-with-background-pages',
-      '--disable-default-apps',
-      '--mute-audio',
-      '--no-default-browser-check',
-      '--autoplay-policy=user-gesture-required',
-      '--disable-background-networking',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-breakpad',
-      '--disable-client-side-phishing-detection',
-      '--disable-component-update',
-      '--disable-features=AudioServiceOutOfProcess',
-      '--disable-hang-monitor',
-      '--disable-ipc-flooding-protection',
-      '--disable-notifications',
-      '--disable-offer-store-unmasked-wallet-cards',
-      '--disable-popup-blocking',
-      '--disable-print-preview',
-      '--disable-prompt-on-repost',
-      '--disable-speech-api',
-      '--disable-sync',
-      '--ignore-gpu-blacklist',
-      '--metrics-recording-only',
-      '--no-pings',
-      '--password-store=basic',
-      '--use-gl=swiftshader',
-      '--use-mock-keychain'
-    ]
-  }
-});
-
-// Event: QR Code generated
-client.on('qr', (qr) => {
-  clientStatus = 'QR_READY';
-  currentQr = qr;
-  console.log('\n========================================');
-  console.log(' [WhatsApp Bot] Lütfen aşağıdaki QR Kodunu okutun:');
-  qrcodeTerminal.generate(qr, { small: true });
-  console.log('========================================\n');
-});
-
-// Event: Client Ready
-client.on('ready', () => {
-  clientStatus = 'CONNECTED';
-  currentQr = null;
-  clientInfo = client.info ? {
-    pushname: client.info.pushname,
-    wid: client.info.wid.user,
-    platform: client.info.platform
-  } : { pushname: 'WhatsApp User' };
-
-  console.log('🟢 [WhatsApp Bot] Başarıyla bağlandı! Hazır.');
-  console.log(`🎯 [Hedef Log Grubu]: \x1b[32m${TARGET_GROUP_ID}\x1b[0m\n`);
-});
-
-// Event: Message Created (Gelen ve Giden Mesajlar - Sadece Hedef Grup)
-client.on('message_create', async (msg) => {
-  try {
-    const isOutgoing = msg.fromMe;
-    let chatId = isOutgoing ? msg.to : msg.from;
-
-    let chatName = 'Bilinmiyor';
-    try {
-      const chat = await msg.getChat();
-      if (chat) {
-        chatName = chat.name || chatName;
-        if (chat.id && chat.id._serialized) {
-          chatId = chat.id._serialized;
-        }
-      }
-    } catch (e) {
-      // Fallback
-    }
-
-    // Sadece hedef grup ID'si (120363288734876760@g.us) olan mesajları terminale bas
-    if (chatId !== TARGET_GROUP_ID && msg.from !== TARGET_GROUP_ID && msg.to !== TARGET_GROUP_ID) {
-      return;
-    }
-
-    const typeTag = isOutgoing ? '\x1b[33m📤 [Giden Mesaj]\x1b[0m' : '\x1b[36m📩 [Gelen Mesaj]\x1b[0m';
-    const content = msg.body || (msg.hasMedia ? '[Medya/Görsel]' : '');
-
-    console.log(`${typeTag} \x1b[1mSohbet:\x1b[0m \x1b[35m${chatName}\x1b[0m | \x1b[1mSohbet ID:\x1b[0m \x1b[32m${chatId}\x1b[0m | \x1b[1mİçerik:\x1b[0m ${content}`);
-  } catch (err) {
-    console.error('⚠️ [Mesaj İşleme Hatası]:', err.message);
-  }
-});
-
-// Event: Authentication failure
-client.on('auth_failure', (msg) => {
-  clientStatus = 'DISCONNECTED';
-  currentQr = null;
-  console.error('🔴 [WhatsApp Bot] Kimlik doğrulama hatası:', msg);
-});
-
-// Event: Disconnected
-client.on('disconnected', (reason) => {
-  clientStatus = 'DISCONNECTED';
-  currentQr = null;
-  clientInfo = null;
-  console.log('🟡 [WhatsApp Bot] Bağlantı kesildi. Sebep:', reason);
-  setTimeout(() => {
-    client.initialize().catch(err => console.error('Yeniden başlatma hatası:', err));
-  }, 5000);
-});
-
-// Start client initialization
-client.initialize().catch(err => {
-  console.error('WhatsApp Client Başlatma Hatası:', err);
-});
+// Start Baileys initialization
+startBaileys();
 
 // Helper: Format BGL Trade Log message for WhatsApp
 function formatTradeLogMessage({ type, amount, price, profit, info, trader }) {
@@ -371,7 +340,7 @@ app.post('/api/send-log', async (req, res) => {
       });
     }
 
-    if (clientStatus !== 'CONNECTED') {
+    if (clientStatus !== 'CONNECTED' || !waSock) {
       return res.status(503).json({
         success: false,
         error: 'WhatsApp istemcisi henüz bağlı değil. Lütfen Admin QR kodunu okutana kadar bekleyin.'
@@ -386,13 +355,21 @@ app.post('/api/send-log', async (req, res) => {
       formattedText = formatTradeLogMessage({ type, amount, price, profit, info, trader });
     }
 
-    // Send WhatsApp message directly to target group ID
-    const sendResult = await client.sendMessage(TARGET_GROUP_ID, formattedText);
+    // Ensure target JID format
+    let targetJid = TARGET_GROUP_ID.trim();
+    if (!targetJid.includes('@g.us') && !targetJid.includes('@s.whatsapp.net')) {
+      targetJid = `${targetJid}@g.us`;
+    }
+
+    // Send WhatsApp message directly via Baileys socket
+    const sendResult = await waSock.sendMessage(targetJid, { text: formattedText });
+
+    const messageId = sendResult?.key?.id || null;
 
     const logEntry = {
       id: Date.now().toString(36) + Math.random().toString(36).substring(2, 5),
       timestamp: new Date().toISOString(),
-      recipient: TARGET_GROUP_ID.replace('@g.us', ''),
+      recipient: targetJid.replace('@g.us', '').replace('@s.whatsapp.net', ''),
       trader: String(trader).trim(),
       type: String(type).toUpperCase(),
       amount,
@@ -401,7 +378,7 @@ app.post('/api/send-log', async (req, res) => {
       info: info || '',
       formattedText,
       status: 'SENT',
-      messageId: (sendResult && sendResult.id) ? (sendResult.id._serialized || sendResult.id) : null
+      messageId
     };
 
     // Save to SQLite Database
