@@ -1220,3 +1220,23 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus, textarea:foc
     order: unset;
   }
 }
+
+/* Disconnect Reason Box */
+.disconnect-reason-box {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  color: #f87171;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.disconnect-reason-box i {
+  font-size: 1.1rem;
+  color: #ef4444;
+  margin-top: 0.1rem;
+}

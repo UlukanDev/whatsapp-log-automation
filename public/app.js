@@ -284,13 +284,22 @@ async function checkStatus() {
 
 // Update UI elements based on status payload
 function updateStatusUI(data) {
-  const { status, qr, clientInfo } = data;
+  const { status, qr, clientInfo, lastDisconnectReason } = data;
 
   const qrContainer = document.getElementById('qr-container');
   const deviceInfo = document.getElementById('device-info');
   const qrWrapper = document.getElementById('qrcode-canvas');
   const qrSpinner = document.getElementById('qr-spinner');
   const qrMessage = document.getElementById('qr-message');
+  const reasonBox = document.getElementById('disconnect-reason-box');
+  const reasonTextEl = document.getElementById('disconnect-reason-text');
+
+  if (lastDisconnectReason && (status === 'DISCONNECTED' || status === 'INITIALIZING' || status === 'QR_READY')) {
+    if (reasonTextEl) reasonTextEl.textContent = lastDisconnectReason;
+    if (reasonBox) reasonBox.classList.remove('hidden');
+  } else {
+    if (reasonBox) reasonBox.classList.add('hidden');
+  }
 
   switch (status) {
     case 'INITIALIZING':
@@ -327,12 +336,12 @@ function updateStatusUI(data) {
 
     case 'DISCONNECTED':
     default:
-      updateStatusBadge('DISCONNECTED', 'Bağlantı Kesildi');
+      updateStatusBadge('DISCONNECTED', lastDisconnectReason || 'Bağlantı Kesildi');
       qrContainer.classList.remove('hidden');
       deviceInfo.classList.add('hidden');
       qrSpinner.classList.add('hidden');
       qrWrapper.innerHTML = '';
-      qrMessage.textContent = 'WhatsApp bağlantısı kopuk. Yeniden bağlanılıyor...';
+      qrMessage.textContent = lastDisconnectReason ? `Bağlantı kesildi: ${lastDisconnectReason}` : 'WhatsApp bağlantısı kopuk. Yeniden bağlanılıyor...';
       break;
   }
 }

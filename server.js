@@ -41,6 +41,7 @@ app.get('/admin', (req, res) => {
 let clientStatus = 'INITIALIZING'; // INITIALIZING, QR_READY, CONNECTED, DISCONNECTED
 let currentQr = null;
 let clientInfo = null;
+let lastDisconnectReason = null;
 let waSock = null;
 const logsHistory = [];
 const TARGET_GROUP_ID = process.env.TARGET_GROUP_ID || '120363288734876760@g.us';
@@ -338,17 +339,41 @@ async function startBaileys() {
         currentQr = null;
         clientInfo = null;
 
-        const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const statusCode = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode;
+        const errorMsg = lastDisconnect?.error?.message || '';
 
-        console.log(`🟡 [Baileys WhatsApp] Bağlantı kesildi (Status: ${statusCode || 'Unknown'}). Yeniden bağlanılıyor mu: ${shouldReconnect}`);
+        let reasonText = '';
+        if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+          reasonText = 'Oturum WhatsApp mobil uygulamasından kapatıldı (Logged Out - 401)';
+        } else if (statusCode === DisconnectReason.connectionClosed || statusCode === 428) {
+          reasonText = 'Bağlantı sunucu tarafından kapatıldı (Connection Closed - 428)';
+        } else if (statusCode === DisconnectReason.connectionLost || statusCode === 408) {
+          reasonText = 'Ağ bağlantısı koptu (Connection Lost - 408)';
+        } else if (statusCode === DisconnectReason.connectionReplaced || statusCode === 440) {
+          reasonText = 'Bağlantı başka bir cihazdan açıldı veya çakıştı (440)';
+        } else if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
+          reasonText = 'Sistem / Baileys yeniden başlatma gerektiriyor (515)';
+        } else if (statusCode === DisconnectReason.timedOut) {
+          reasonText = 'Bağlantı zaman aşımına uğradı (Timed Out)';
+        } else if (statusCode === DisconnectReason.badSession || statusCode === 500) {
+          reasonText = 'Bozuk veya geçersiz oturum verisi (500)';
+        } else {
+          reasonText = `Geçici Bağlantı Hatası (Status Code: ${statusCode || 'Bilinmiyor'}${errorMsg ? ` - ${errorMsg}` : ''})`;
+        }
+
+        lastDisconnectReason = reasonText;
+
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 401;
+
+        console.log(`🟡 [Baileys WhatsApp] Bağlantı kesildi. Sebeb: ${reasonText}. Yeniden bağlanılıyor mu: ${shouldReconnect}`);
 
         if (shouldReconnect) {
+          console.log('🔄 [Auto Reconnect] Geçici kopma! Veritabanındaki oturum verisi korunuyor, 5 saniye sonra otomatik tekrar bağlanılıyor...');
           setTimeout(() => {
             startBaileys().catch(err => console.error('Baileys Yeniden Başlatma Hatası:', err));
-          }, 3000);
+          }, 5000);
         } else {
-          console.log('🔴 [Baileys WhatsApp] Oturum kapatıldı (Logged Out). Veritabanı kimlik verileri temizleniyor...');
+          console.log('🔴 [Baileys WhatsApp] Oturum WhatsApp uygulamasından kapatıldı (401). Veritabanı kimlik verileri temizleniyor ve yeni QR üretiliyor...');
           try {
             await clearAllAuthData();
           } catch (e) {}
@@ -359,6 +384,7 @@ async function startBaileys() {
       } else if (connection === 'open') {
         clientStatus = 'CONNECTED';
         currentQr = null;
+        lastDisconnectReason = null;
         const userJid = sock.user?.id ? sock.user.id.split(':')[0] : 'Admin';
         clientInfo = {
           pushname: sock.user?.name || sock.user?.notify || 'BGL Admin',
@@ -434,6 +460,7 @@ app.get('/api/status', (req, res) => {
     status: clientStatus,
     qr: currentQr,
     clientInfo: clientInfo,
+    lastDisconnectReason: lastDisconnectReason,
     targetGroup: TARGET_GROUP_ID,
     timestamp: new Date().toISOString()
   });
