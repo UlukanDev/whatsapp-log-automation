@@ -558,17 +558,30 @@ app.post('/api/send-log', async (req, res) => {
 // 5. Get Logs History from SQLite Database
 app.get('/api/logs', async (req, res) => {
   try {
-    const dbLogs = await getLogsFromDb();
+    const userFilter = req.query.user || req.query.trader;
+    let dbLogs = await getLogsFromDb();
+
+    if (userFilter && String(userFilter).trim() !== '' && String(userFilter).trim().toUpperCase() !== 'ALL') {
+      const cleanUser = String(userFilter).trim().toLowerCase();
+      dbLogs = dbLogs.filter(l => (l.trader || '').trim().toLowerCase() === cleanUser);
+    }
+
     res.json({
       success: true,
       total: dbLogs.length,
       logs: dbLogs
     });
   } catch (err) {
+    let logs = logsHistory;
+    const userFilter = req.query.user || req.query.trader;
+    if (userFilter && String(userFilter).trim() !== '' && String(userFilter).trim().toUpperCase() !== 'ALL') {
+      const cleanUser = String(userFilter).trim().toLowerCase();
+      logs = logs.filter(l => (l.trader || '').trim().toLowerCase() === cleanUser);
+    }
     res.json({
       success: true,
-      total: logsHistory.length,
-      logs: logsHistory
+      total: logs.length,
+      logs: logs
     });
   }
 });
@@ -779,19 +792,41 @@ app.get('/api/admin/accounting', (req, res) => {
     return res.status(403).json({ success: false, error: 'Yetkisiz admin erişimi.' });
   }
 
+  const { timeRange, trader: traderFilter } = req.query;
+
   db.all(`SELECT * FROM logs ORDER BY timestamp DESC`, [], (err, logs) => {
     if (err) return res.status(500).json({ success: false, error: err.message });
+
+    const now = Date.now();
+    let filteredLogs = logs;
+
+    // Filter by Time Range
+    if (timeRange === 'weekly') {
+      const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+      filteredLogs = filteredLogs.filter(l => new Date(l.timestamp).getTime() >= sevenDaysAgo);
+    } else if (timeRange === 'monthly') {
+      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+      filteredLogs = filteredLogs.filter(l => new Date(l.timestamp).getTime() >= thirtyDaysAgo);
+    } else if (timeRange === 'daily') {
+      const oneDayAgo = now - 24 * 60 * 60 * 1000;
+      filteredLogs = filteredLogs.filter(l => new Date(l.timestamp).getTime() >= oneDayAgo);
+    }
+
+    // Filter by Trader if specific trader selected
+    if (traderFilter && traderFilter !== 'ALL') {
+      filteredLogs = filteredLogs.filter(l => (l.trader || '').trim().toLowerCase() === traderFilter.trim().toLowerCase());
+    }
 
     let totalBuyAmount = 0;
     let totalBuyPrice = 0;
     let totalSoldAmount = 0;
     let totalSoldPrice = 0;
     let totalProfit = 0;
-    let totalTrades = logs.length;
+    let totalTrades = filteredLogs.length;
 
     const adminStats = {};
 
-    logs.forEach(log => {
+    filteredLogs.forEach(log => {
       const trader = log.trader || 'Bilinmiyor';
       if (!adminStats[trader]) {
         adminStats[trader] = {
@@ -802,7 +837,8 @@ app.get('/api/admin/accounting', (req, res) => {
           soldCount: 0,
           soldAmount: 0,
           soldProfit: 0,
-          totalTrades: 0
+          totalTrades: 0,
+          currentStock: 0
         };
       }
 
@@ -818,7 +854,7 @@ app.get('/api/admin/accounting', (req, res) => {
         adminStats[trader].buyCount += 1;
         adminStats[trader].buyAmount += amt;
         adminStats[trader].buyPrice += prc;
-        adminStats[trader].currentStock = (adminStats[trader].currentStock || 0) + amt;
+        adminStats[trader].currentStock += amt;
       } else if (log.type === 'SOLD') {
         totalSoldAmount += amt;
         totalSoldPrice += prc;
@@ -826,7 +862,7 @@ app.get('/api/admin/accounting', (req, res) => {
         adminStats[trader].soldCount += 1;
         adminStats[trader].soldAmount += amt;
         adminStats[trader].soldProfit += prft;
-        adminStats[trader].currentStock = (adminStats[trader].currentStock || 0) - amt;
+        adminStats[trader].currentStock -= amt;
       }
     });
 

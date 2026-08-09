@@ -12,6 +12,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
+  <!-- Chart.js Library -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -209,13 +212,42 @@
           </div>
         </div>
 
+        <!-- Chart.js Performance Dashboard Card -->
+        <div class="card full-width margin-top-15">
+          <div class="card-header" style="flex-wrap: wrap; gap: 0.8rem; justify-content: space-between;">
+            <h2><i class="fa-solid fa-chart-column"></i> 📊 Admin Performans & Kâr Analiz Grafiği</h2>
+            <div class="chart-timeframe-selector" style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+              <button type="button" id="chart-btn-daily" class="btn btn-sm btn-secondary" onclick="setChartTimeframe('daily')">⏱️ Günlük</button>
+              <button type="button" id="chart-btn-weekly" class="btn btn-sm btn-secondary" onclick="setChartTimeframe('weekly')">📅 Haftalık</button>
+              <button type="button" id="chart-btn-monthly" class="btn btn-sm btn-secondary" onclick="setChartTimeframe('monthly')">🗓️ Aylık</button>
+              <button type="button" id="chart-btn-all" class="btn btn-sm btn-secondary active" onclick="setChartTimeframe('all')">∞ Tüm Zamanlar</button>
+            </div>
+          </div>
+          <div class="card-body" style="position: relative; height: 320px; width: 100%; padding: 1rem;">
+            <canvas id="performanceChartCanvas"></canvas>
+          </div>
+        </div>
+
         <!-- Admin Breakdown Table -->
         <div class="card full-width margin-top-15">
-          <div class="card-header">
+          <div class="card-header" style="flex-wrap: wrap; gap: 0.8rem; justify-content: space-between;">
             <h2><i class="fa-solid fa-users-viewfinder"></i> Personel / Admin Bazlı Kazanç & İşlem Dağılımı</h2>
-            <button class="btn btn-secondary btn-sm" onclick="fetchAccountingData()">
-              <i class="fa-solid fa-rotate"></i> Verileri Yenile
-            </button>
+            <div style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
+              <!-- Tarih Filtresi -->
+              <select id="breakdown-filter-date" onchange="handleBreakdownFilterChange()" style="padding: 0.45rem 0.8rem; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--card-border); border-radius: var(--radius-sm); outline: none; cursor: pointer;">
+                <option value="all" selected>🗓️ Tüm Zamanlar</option>
+                <option value="weekly">📅 Haftalık (Son 7 Gün)</option>
+                <option value="monthly">🗓️ Aylık (Son 30 Gün)</option>
+                <option value="daily">⏱️ Günlük (Son 24 Saat)</option>
+              </select>
+              <!-- Personel Seçimi -->
+              <select id="breakdown-filter-trader" onchange="handleBreakdownFilterChange()" style="padding: 0.45rem 0.8rem; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--card-border); border-radius: var(--radius-sm); outline: none; cursor: pointer;">
+                <option value="ALL" selected>👥 Tüm Adminler (Tümü)</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="fetchAccountingData()">
+                <i class="fa-solid fa-rotate"></i> Verileri Yenile
+              </button>
+            </div>
           </div>
           <div class="card-body padding-0">
             <div class="table-responsive">

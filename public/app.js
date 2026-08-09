@@ -75,6 +75,7 @@ function initAuthCheck() {
     }
   }
   updatePreview();
+  fetchLogs();
 }
 
 // Fetch Personal Stock Balance
@@ -463,7 +464,8 @@ function resetForm() {
 // Fetch logs history from server
 async function fetchLogs() {
   try {
-    const res = await fetch('/api/logs');
+    const url = loggedUser ? `/api/logs?user=${encodeURIComponent(loggedUser)}` : '/api/logs';
+    const res = await fetch(url);
     const data = await res.json();
 
     if (data.success) {

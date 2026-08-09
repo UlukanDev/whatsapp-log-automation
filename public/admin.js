@@ -3,6 +3,11 @@ let allPersonnel = [];
 let allLogs = [];
 let selectedTraderFilter = 'ALL';
 
+let breakdownDateFilter = 'all';
+let breakdownTraderFilter = 'ALL';
+let chartTimeframeFilter = 'all';
+let performanceChart = null;
+
 document.addEventListener('DOMContentLoaded', () => {
   initAdminAuth();
 });
@@ -97,6 +102,45 @@ function switchTab(tabName) {
   }
 }
 
+// Handle Breakdown Filter Changes (Date or Personnel)
+function handleBreakdownFilterChange() {
+  const dateEl = document.getElementById('breakdown-filter-date');
+  const traderEl = document.getElementById('breakdown-filter-trader');
+
+  if (dateEl) breakdownDateFilter = dateEl.value;
+  if (traderEl) breakdownTraderFilter = traderEl.value;
+
+  fetchAccountingData();
+}
+
+// Set Chart Timeframe (Daily / Weekly / Monthly / All)
+function setChartTimeframe(tf) {
+  chartTimeframeFilter = tf;
+
+  const btns = {
+    daily: document.getElementById('chart-btn-daily'),
+    weekly: document.getElementById('chart-btn-weekly'),
+    monthly: document.getElementById('chart-btn-monthly'),
+    all: document.getElementById('chart-btn-all')
+  };
+
+  Object.keys(btns).forEach(key => {
+    if (btns[key]) {
+      if (key === tf) {
+        btns[key].classList.add('active');
+        btns[key].style.background = 'var(--primary-color)';
+        btns[key].style.color = '#fff';
+      } else {
+        btns[key].classList.remove('active');
+        btns[key].style.background = '';
+        btns[key].style.color = '';
+      }
+    }
+  });
+
+  renderPerformanceChart(allLogs);
+}
+
 // Fetch Accounting Data & Logs History from Backend API
 async function fetchAccountingData() {
   if (!adminToken) {
@@ -105,8 +149,11 @@ async function fetchAccountingData() {
   }
 
   try {
+    const dateVal = document.getElementById('breakdown-filter-date')?.value || breakdownDateFilter || 'all';
+    const traderVal = document.getElementById('breakdown-filter-trader')?.value || breakdownTraderFilter || 'ALL';
+
     const [accRes, logsRes] = await Promise.all([
-      fetch('/api/admin/accounting', {
+      fetch(`/api/admin/accounting?timeRange=${encodeURIComponent(dateVal)}&trader=${encodeURIComponent(traderVal)}`, {
         headers: { 'Authorization': `Bearer ${adminToken}` }
       }).catch(e => ({ ok: false, status: 500 })),
       fetch('/api/logs').catch(e => ({ ok: false, status: 500 }))
@@ -133,20 +180,50 @@ async function fetchAccountingData() {
     if (logsData && logsData.success) {
       allLogs = logsData.logs || [];
       populateTraderFilterDropdown(allLogs);
+      populateBreakdownTraderDropdown(allLogs);
       renderLogsTable();
+      renderPerformanceChart(allLogs);
     } else {
       allLogs = [];
       renderLogsTable();
+      renderPerformanceChart([]);
     }
   } catch (err) {
     console.error('Accounting data fetch error:', err);
     renderAccountingSummary({ totalBuyAmount: 0, totalBuyPrice: 0, totalSoldAmount: 0, totalSoldPrice: 0, totalProfit: 0, totalTrades: 0 });
     renderAdminBreakdown([], 0);
     renderLogsTable();
+    renderPerformanceChart([]);
   }
 }
 
-// Populate Personnel Filter Dropdown
+// Populate Personnel Filter Dropdown for Breakdown Card
+function populateBreakdownTraderDropdown(logs) {
+  const selectEl = document.getElementById('breakdown-filter-trader');
+  if (!selectEl) return;
+
+  const currentVal = selectEl.value || breakdownTraderFilter || 'ALL';
+
+  const traderSet = new Set();
+  logs.forEach(l => {
+    if (l.trader && l.trader.trim()) {
+      traderSet.add(l.trader.trim());
+    }
+  });
+
+  const traders = Array.from(traderSet).sort();
+
+  let html = `<option value="ALL">👥 Tüm Adminler (Tümü)</option>`;
+  traders.forEach(t => {
+    html += `<option value="${escapeHtml(t)}">👤 ${escapeHtml(t)}</option>`;
+  });
+
+  selectEl.innerHTML = html;
+  selectEl.value = traders.includes(currentVal) ? currentVal : 'ALL';
+  breakdownTraderFilter = selectEl.value;
+}
+
+// Populate Personnel Filter Dropdown for Logs Table
 function populateTraderFilterDropdown(logs) {
   const selectEl = document.getElementById('log-filter-trader');
   if (!selectEl) return;
@@ -193,6 +270,140 @@ function filterLogsByTrader(traderName) {
   if (logsCard) {
     logsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+}
+
+// Render Chart.js Performance & Profit Dashboard
+function renderPerformanceChart(logs) {
+  const canvas = document.getElementById('performanceChartCanvas');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const ctx = canvas.getContext('2d');
+
+  // Filter logs by selected chart timeframe
+  const now = Date.now();
+  let filtered = logs || [];
+
+  if (chartTimeframeFilter === 'daily') {
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= oneDayAgo);
+  } else if (chartTimeframeFilter === 'weekly') {
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= sevenDaysAgo);
+  } else if (chartTimeframeFilter === 'monthly') {
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= thirtyDaysAgo);
+  }
+
+  // Aggregate stats per trader
+  const statsByTrader = {};
+
+  filtered.forEach(log => {
+    const trader = (log.trader || 'Bilinmiyor').trim();
+    if (!statsByTrader[trader]) {
+      statsByTrader[trader] = {
+        profit: 0,
+        soldAmount: 0,
+        buyAmount: 0
+      };
+    }
+    const amt = parseFloat(log.amount) || 0;
+    const prft = parseFloat(log.profit) || 0;
+
+    if (log.type === 'BUY') {
+      statsByTrader[trader].buyAmount += amt;
+    } else if (log.type === 'SOLD') {
+      statsByTrader[trader].soldAmount += amt;
+      statsByTrader[trader].profit += prft;
+    }
+  });
+
+  const labels = Object.keys(statsByTrader).sort();
+  const profitData = labels.map(t => statsByTrader[t].profit);
+  const soldData = labels.map(t => statsByTrader[t].soldAmount);
+  const buyData = labels.map(t => statsByTrader[t].buyAmount);
+
+  if (performanceChart) {
+    performanceChart.destroy();
+  }
+
+  performanceChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels.length > 0 ? labels : ['Veri Yok'],
+      datasets: [
+        {
+          label: 'Net Kâr (TL)',
+          data: labels.length > 0 ? profitData : [0],
+          backgroundColor: 'rgba(52, 211, 153, 0.85)',
+          borderColor: '#34d399',
+          borderWidth: 1.5,
+          borderRadius: 6
+        },
+        {
+          label: 'Satış Hacmi (bgl)',
+          data: labels.length > 0 ? soldData : [0],
+          backgroundColor: 'rgba(96, 165, 250, 0.85)',
+          borderColor: '#60a5fa',
+          borderWidth: 1.5,
+          borderRadius: 6
+        },
+        {
+          label: 'Alış Hacmi (bgl)',
+          data: labels.length > 0 ? buyData : [0],
+          backgroundColor: 'rgba(168, 85, 247, 0.85)',
+          borderColor: '#c084fc',
+          borderWidth: 1.5,
+          borderRadius: 6
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: '#94a3b8',
+            font: { family: 'Inter', size: 12, weight: '500' }
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          titleColor: '#f8fafc',
+          bodyColor: '#cbd5e1',
+          borderColor: 'rgba(255, 255, 255, 0.1)',
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            label: function(context) {
+              let label = context.dataset.label || '';
+              if (label) {
+                label += ': ';
+              }
+              if (context.parsed.y !== null) {
+                label += Number(context.parsed.y).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+              }
+              return label;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#94a3b8', font: { family: 'Inter', size: 12 } }
+        },
+        y: {
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#94a3b8', font: { family: 'Inter', size: 12 } }
+        }
+      }
+    }
+  });
 }
 
 // Render Top Stat Cards
