@@ -10,9 +10,11 @@ const pino = require('pino');
 
 const {
   default: makeWASocket,
-  useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  initAuthCreds,
+  BufferJSON,
+  proto
 } = require('@whiskeysockets/baileys');
 
 dotenv.config();
@@ -24,6 +26,11 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Keep-Alive /ping Endpoint
+app.get('/ping', (req, res) => {
+  res.status(200).send('OK');
+});
 
 // Serve admin page directly at /admin
 app.get('/admin', (req, res) => {
@@ -66,6 +73,13 @@ const INITIAL_USERS = [
 
 // Create tables if not exist
 db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS auth_state (
+      id TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
   db.run(`
     CREATE TABLE IF NOT EXISTS logs (
       id TEXT PRIMARY KEY,
@@ -147,19 +161,153 @@ function getLogsFromDb() {
   });
 }
 
-// Baileys Session Auth Storage Directory
-const authDir = path.join(__dirname, 'data', 'auth_info_baileys');
-if (!fs.existsSync(authDir)) {
-  fs.mkdirSync(authDir, { recursive: true });
+// SQLite Auth Storage Helpers for Baileys
+function getAuthData(id) {
+  return new Promise((resolve) => {
+    db.get('SELECT value FROM auth_state WHERE id = ?', [id], (err, row) => {
+      if (err || !row) return resolve(null);
+      try {
+        const parsed = JSON.parse(row.value, BufferJSON.reviver);
+        resolve(parsed);
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  });
+}
+
+function setAuthData(id, value) {
+  return new Promise((resolve, reject) => {
+    if (value === null || value === undefined) {
+      db.run('DELETE FROM auth_state WHERE id = ?', [id], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    } else {
+      const json = JSON.stringify(value, BufferJSON.replacer);
+      db.run(
+        'INSERT OR REPLACE INTO auth_state (id, value) VALUES (?, ?)',
+        [id, json],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    }
+  });
+}
+
+function removeAuthData(id) {
+  return new Promise((resolve, reject) => {
+    db.run('DELETE FROM auth_state WHERE id = ?', [id], (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
+
+function clearAllAuthData() {
+  return new Promise((resolve, reject) => {
+    db.run('DELETE FROM auth_state', [], (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
+
+async function migrateFileAuthToDb() {
+  try {
+    const authDir = path.join(__dirname, 'data', 'auth_info_baileys');
+    if (fs.existsSync(authDir)) {
+      const files = fs.readdirSync(authDir);
+      if (files.length > 0) {
+        console.log('🔄 [SQLite Auth Migration] Dosya tabanlı oturum verileri SQLite veritabanına taşınıyor...');
+        for (const file of files) {
+          if (file.endsWith('.json')) {
+            const filePath = path.join(authDir, file);
+            const content = fs.readFileSync(filePath, 'utf-8');
+            try {
+              const parsed = JSON.parse(content, BufferJSON.reviver);
+              let id = file.replace('.json', '');
+              await setAuthData(id, parsed);
+            } catch (e) {}
+          }
+        }
+        console.log('✅ [SQLite Auth Migration] Oturum verileri veritabanına aktarıldı.');
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ [SQLite Auth Migration Warning]:', err.message);
+  }
+}
+
+async function useSQLiteAuthState() {
+  // Ensure auth_state table exists
+  await new Promise((resolve, reject) => {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS auth_state (
+        id TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+
+  const existingCreds = await getAuthData('creds');
+  if (!existingCreds) {
+    await migrateFileAuthToDb();
+  }
+
+  const creds = (await getAuthData('creds')) || initAuthCreds();
+
+  return {
+    state: {
+      creds,
+      keys: {
+        get: async (type, ids) => {
+          const data = {};
+          await Promise.all(
+            ids.map(async (id) => {
+              let value = await getAuthData(`${type}-${id}`);
+              if (type === 'app-state-sync-key' && value) {
+                value = proto.Message.AppStateSyncKeyData.fromObject(value);
+              }
+              data[id] = value;
+            })
+          );
+          return data;
+        },
+        set: async (data) => {
+          const tasks = [];
+          for (const category in data) {
+            for (const id in data[category]) {
+              const value = data[category][id];
+              const keyId = `${category}-${id}`;
+              tasks.push(value ? setAuthData(keyId, value) : removeAuthData(keyId));
+            }
+          }
+          await Promise.all(tasks);
+        }
+      }
+    },
+    saveCreds: async () => {
+      return setAuthData('creds', creds);
+    },
+    clearState: async () => {
+      return clearAllAuthData();
+    }
+  };
 }
 
 // Baileys Connection Setup
 async function startBaileys() {
   try {
-    const { state, saveCreds } = await useMultiFileAuthState(authDir);
+    const { state, saveCreds } = await useSQLiteAuthState();
     const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1015901307] }));
 
-    console.log(`📱 [Baileys Engine] WebSocket tabanlı WhatsApp başlatılıyor (v${version.join('.')})...`);
+    console.log(`📱 [Baileys Engine] SQLite veritabanı tabanlı WhatsApp başlatılıyor (v${version.join('.')})...`);
 
     const sock = makeWASocket({
       version,
@@ -200,10 +348,9 @@ async function startBaileys() {
             startBaileys().catch(err => console.error('Baileys Yeniden Başlatma Hatası:', err));
           }, 3000);
         } else {
-          console.log('🔴 [Baileys WhatsApp] Oturum kapatıldı (Logged Out). Kimlik verileri temizleniyor...');
+          console.log('🔴 [Baileys WhatsApp] Oturum kapatıldı (Logged Out). Veritabanı kimlik verileri temizleniyor...');
           try {
-            fs.rmSync(authDir, { recursive: true, force: true });
-            fs.mkdirSync(authDir, { recursive: true });
+            await clearAllAuthData();
           } catch (e) {}
           setTimeout(() => {
             startBaileys().catch(err => console.error('Baileys Yeniden Başlatma Hatası:', err));
@@ -216,7 +363,7 @@ async function startBaileys() {
         clientInfo = {
           pushname: sock.user?.name || sock.user?.notify || 'BGL Admin',
           wid: userJid,
-          platform: 'Baileys Multi-Device WebSocket'
+          platform: 'Baileys Multi-Device WebSocket (SQLite Auth)'
         };
 
         console.log('🟢 [Baileys WhatsApp] Başarıyla bağlandı! Işık hızında WhatsApp Bot aktif.');
