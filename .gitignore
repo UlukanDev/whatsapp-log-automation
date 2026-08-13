@@ -7,10 +7,6 @@ yarn-error.log*
 # Local environment variables
 .env
 
-# SQLite Data directory
-data/
-*.db
-
 # WhatsApp Web Session storage
 .wwebjs_auth/
 .wwebjs_cache/

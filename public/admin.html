@@ -216,11 +216,20 @@
         <div class="card full-width margin-top-15">
           <div class="card-header" style="flex-wrap: wrap; gap: 0.8rem; justify-content: space-between;">
             <h2><i class="fa-solid fa-chart-column"></i> 📊 Admin Performans & Kâr Analiz Grafiği</h2>
-            <div class="chart-timeframe-selector" style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-              <button type="button" id="chart-btn-daily" class="btn btn-sm btn-secondary" onclick="setChartTimeframe('daily')">⏱️ Günlük</button>
-              <button type="button" id="chart-btn-weekly" class="btn btn-sm btn-secondary" onclick="setChartTimeframe('weekly')">📅 Haftalık</button>
-              <button type="button" id="chart-btn-monthly" class="btn btn-sm btn-secondary" onclick="setChartTimeframe('monthly')">🗓️ Aylık</button>
-              <button type="button" id="chart-btn-all" class="btn btn-sm btn-secondary active" onclick="setChartTimeframe('all')">∞ Tüm Zamanlar</button>
+            <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+              <!-- Grafik Türü Değiştirici -->
+              <div class="chart-type-selector" style="display: flex; gap: 0.3rem;">
+                <button type="button" id="chart-type-bar" class="btn btn-sm btn-secondary active" onclick="setChartType('bar')">📊 Sütun (Bar)</button>
+                <button type="button" id="chart-type-line" class="btn btn-sm btn-secondary" onclick="setChartType('line')">📈 Çizgi (Line)</button>
+              </div>
+              <div style="height: 20px; width: 1px; background: var(--card-border);"></div>
+              <!-- Zaman Filtresi -->
+              <div class="chart-timeframe-selector" style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                <button type="button" id="chart-btn-daily" class="btn btn-sm btn-secondary" onclick="setChartTimeframe('daily')">⏱️ Günlük</button>
+                <button type="button" id="chart-btn-weekly" class="btn btn-sm btn-secondary" onclick="setChartTimeframe('weekly')">📅 Haftalık</button>
+                <button type="button" id="chart-btn-monthly" class="btn btn-sm btn-secondary" onclick="setChartTimeframe('monthly')">🗓️ Aylık</button>
+                <button type="button" id="chart-btn-all" class="btn btn-sm btn-secondary active" onclick="setChartTimeframe('all')">∞ Tüm Zamanlar</button>
+              </div>
             </div>
           </div>
           <div class="card-body" style="position: relative; height: 320px; width: 100%; padding: 1rem;">
@@ -238,7 +247,7 @@
                 <option value="all" selected>🗓️ Tüm Zamanlar</option>
                 <option value="weekly">📅 Haftalık (Son 7 Gün)</option>
                 <option value="monthly">🗓️ Aylık (Son 30 Gün)</option>
-                <option value="daily">⏱️ Günlük (Son 24 Saat)</option>
+                <option value="daily">⏱️ Günlük (Bugün 00:00'dan Beri)</option>
               </select>
               <!-- Personel Seçimi -->
               <select id="breakdown-filter-trader" onchange="handleBreakdownFilterChange()" style="padding: 0.45rem 0.8rem; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--card-border); border-radius: var(--radius-sm); outline: none; cursor: pointer;">
@@ -308,6 +317,24 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            <!-- Genel Muhasebe Logları Sayfalama (Pagination) Kontrol Paneli -->
+            <div class="pagination-container" id="logs-pagination" style="display: flex; align-items: center; justify-content: space-between; padding: 0.8rem 1.25rem; border-top: 1px solid var(--card-border); background: rgba(0, 0, 0, 0.2); flex-wrap: wrap; gap: 0.8rem;">
+              <div style="font-size: 0.85rem; color: var(--text-muted);">
+                Toplam <strong id="pagination-total-count" style="color: var(--text-main);">0</strong> log kaydından <span id="pagination-range-info" style="font-weight: 600; color: #60a5fa;">0 - 0</span> arası gösteriliyor
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.6rem;">
+                <button type="button" id="btn-prev-page" class="btn btn-secondary btn-sm" onclick="changeLogPage(-1)" disabled>
+                  ⬅️ Önceki
+                </button>
+                <span id="pagination-page-info" style="font-size: 0.85rem; font-weight: 600; padding: 0.35rem 0.85rem; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: var(--radius-sm); color: var(--text-main);">
+                  Sayfa 1 / 1
+                </span>
+                <button type="button" id="btn-next-page" class="btn btn-secondary btn-sm" onclick="changeLogPage(1)" disabled>
+                  Sonraki ➡️
+                </button>
+              </div>
             </div>
           </div>
         </div>

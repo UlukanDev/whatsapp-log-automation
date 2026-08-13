@@ -6,7 +6,11 @@ let selectedTraderFilter = 'ALL';
 let breakdownDateFilter = 'all';
 let breakdownTraderFilter = 'ALL';
 let chartTimeframeFilter = 'all';
+let currentChartType = 'bar';
 let performanceChart = null;
+
+let currentLogPage = 1;
+const LOGS_PER_PAGE = 15;
 
 document.addEventListener('DOMContentLoaded', () => {
   initAdminAuth();
@@ -253,12 +257,14 @@ function populateTraderFilterDropdown(logs) {
 function handleTraderFilterChange() {
   const selectEl = document.getElementById('log-filter-trader');
   selectedTraderFilter = selectEl.value;
+  currentLogPage = 1;
   renderLogsTable();
 }
 
 // Filter Logs By Specific Trader
 function filterLogsByTrader(traderName) {
   selectedTraderFilter = traderName;
+  currentLogPage = 1;
   const selectEl = document.getElementById('log-filter-trader');
   if (selectEl) {
     selectEl.value = traderName;
@@ -270,6 +276,34 @@ function filterLogsByTrader(traderName) {
   if (logsCard) {
     logsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+}
+
+// Set Chart Type (Bar / Line)
+function setChartType(type) {
+  currentChartType = type;
+
+  const barBtn = document.getElementById('chart-type-bar');
+  const lineBtn = document.getElementById('chart-type-line');
+
+  if (barBtn && lineBtn) {
+    if (type === 'bar') {
+      barBtn.classList.add('active');
+      barBtn.style.background = 'var(--primary-accent)';
+      barBtn.style.color = '#0b0f17';
+      lineBtn.classList.remove('active');
+      lineBtn.style.background = '';
+      lineBtn.style.color = '';
+    } else {
+      lineBtn.classList.add('active');
+      lineBtn.style.background = 'var(--primary-accent)';
+      lineBtn.style.color = '#0b0f17';
+      barBtn.classList.remove('active');
+      barBtn.style.background = '';
+      barBtn.style.color = '';
+    }
+  }
+
+  renderPerformanceChart(allLogs);
 }
 
 // Render Chart.js Performance & Profit Dashboard
@@ -284,8 +318,9 @@ function renderPerformanceChart(logs) {
   let filtered = logs || [];
 
   if (chartTimeframeFilter === 'daily') {
-    const oneDayAgo = now - 24 * 60 * 60 * 1000;
-    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= oneDayAgo);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= startOfToday.getTime());
   } else if (chartTimeframeFilter === 'weekly') {
     const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
     filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= sevenDaysAgo);
@@ -326,34 +361,48 @@ function renderPerformanceChart(logs) {
     performanceChart.destroy();
   }
 
+  const isLine = currentChartType === 'line';
+
   performanceChart = new Chart(ctx, {
-    type: 'bar',
+    type: currentChartType || 'bar',
     data: {
       labels: labels.length > 0 ? labels : ['Veri Yok'],
       datasets: [
         {
           label: 'Net Kâr (TL)',
           data: labels.length > 0 ? profitData : [0],
-          backgroundColor: 'rgba(52, 211, 153, 0.85)',
+          backgroundColor: isLine ? 'rgba(52, 211, 153, 0.15)' : 'rgba(52, 211, 153, 0.85)',
           borderColor: '#34d399',
-          borderWidth: 1.5,
-          borderRadius: 6
+          borderWidth: 2,
+          borderRadius: isLine ? 0 : 6,
+          fill: isLine,
+          tension: 0.35,
+          pointRadius: isLine ? 5 : 0,
+          pointHoverRadius: isLine ? 7 : 0
         },
         {
           label: 'Satış Hacmi (bgl)',
           data: labels.length > 0 ? soldData : [0],
-          backgroundColor: 'rgba(96, 165, 250, 0.85)',
+          backgroundColor: isLine ? 'rgba(96, 165, 250, 0.15)' : 'rgba(96, 165, 250, 0.85)',
           borderColor: '#60a5fa',
-          borderWidth: 1.5,
-          borderRadius: 6
+          borderWidth: 2,
+          borderRadius: isLine ? 0 : 6,
+          fill: isLine,
+          tension: 0.35,
+          pointRadius: isLine ? 5 : 0,
+          pointHoverRadius: isLine ? 7 : 0
         },
         {
           label: 'Alış Hacmi (bgl)',
           data: labels.length > 0 ? buyData : [0],
-          backgroundColor: 'rgba(168, 85, 247, 0.85)',
+          backgroundColor: isLine ? 'rgba(168, 85, 247, 0.15)' : 'rgba(168, 85, 247, 0.85)',
           borderColor: '#c084fc',
-          borderWidth: 1.5,
-          borderRadius: 6
+          borderWidth: 2,
+          borderRadius: isLine ? 0 : 6,
+          fill: isLine,
+          tension: 0.35,
+          pointRadius: isLine ? 5 : 0,
+          pointHoverRadius: isLine ? 7 : 0
         }
       ]
     },
@@ -462,7 +511,9 @@ function renderAdminBreakdown(breakdown, totalTradesCount) {
         <td>
           <div class="progress-bar-container">
             <div class="progress-bar" style="width: ${tradeShare}%;"></div>
-            <span class="progress-text">${tradeShare}% (${item.totalTrades} işlem)</span>
+            <div class="progress-text">
+              <span class="progress-text-pill"><strong>${tradeShare}%</strong> (${item.totalTrades} işlem)</span>
+            </div>
           </div>
         </td>
       </tr>
@@ -470,7 +521,7 @@ function renderAdminBreakdown(breakdown, totalTradesCount) {
   }).join('');
 }
 
-// Render Accounting Logs Table
+// Render Accounting Logs Table with Pagination
 function renderLogsTable() {
   const tbody = document.getElementById('logs-tbody');
   const badgeEl = document.getElementById('active-log-filter-badge');
@@ -490,7 +541,19 @@ function renderLogsTable() {
     }
   }
 
-  if (!filteredLogs || filteredLogs.length === 0) {
+  const totalCount = filteredLogs.length;
+  const totalPages = Math.ceil(totalCount / LOGS_PER_PAGE) || 1;
+
+  if (currentLogPage > totalPages) currentLogPage = totalPages;
+  if (currentLogPage < 1) currentLogPage = 1;
+
+  const startIndex = (currentLogPage - 1) * LOGS_PER_PAGE;
+  const endIndex = Math.min(startIndex + LOGS_PER_PAGE, totalCount);
+  const pageLogs = filteredLogs.slice(startIndex, endIndex);
+
+  updatePaginationControls(totalCount, totalPages, startIndex, endIndex);
+
+  if (!pageLogs || pageLogs.length === 0) {
     tbody.innerHTML = `
       <tr>
         <td colspan="7" class="text-center empty-state">İşlem logu bulunamadı.</td>
@@ -499,7 +562,7 @@ function renderLogsTable() {
     return;
   }
 
-  tbody.innerHTML = filteredLogs.map(log => {
+  tbody.innerHTML = pageLogs.map(log => {
     const isBuy = (log.type || 'BUY').toUpperCase() === 'BUY';
     const typeBadge = isBuy
       ? `<span class="badge badge-success" style="font-size: 0.8rem;"><i class="fa-solid fa-cart-shopping"></i> BUY</span>`
@@ -548,6 +611,28 @@ function renderLogsTable() {
       </tr>
     `;
   }).join('');
+}
+
+// Update Pagination Controls UI
+function updatePaginationControls(totalCount, totalPages, startIndex, endIndex) {
+  const totalEl = document.getElementById('pagination-total-count');
+  const rangeEl = document.getElementById('pagination-range-info');
+  const pageInfoEl = document.getElementById('pagination-page-info');
+  const prevBtn = document.getElementById('btn-prev-page');
+  const nextBtn = document.getElementById('btn-next-page');
+
+  if (totalEl) totalEl.textContent = totalCount;
+  if (rangeEl) rangeEl.textContent = totalCount > 0 ? `${startIndex + 1} - ${endIndex}` : '0 - 0';
+  if (pageInfoEl) pageInfoEl.textContent = `Sayfa ${currentLogPage} / ${totalPages}`;
+
+  if (prevBtn) prevBtn.disabled = currentLogPage <= 1;
+  if (nextBtn) nextBtn.disabled = currentLogPage >= totalPages;
+}
+
+// Handle Log Table Page Navigation
+function changeLogPage(delta) {
+  currentLogPage += delta;
+  renderLogsTable();
 }
 
 // Toggle Profit field visibility in Edit Log Modal

@@ -150,7 +150,7 @@ function saveLogToDb(logEntry) {
 // Helper: Fetch logs from SQLite
 function getLogsFromDb() {
   return new Promise((resolve, reject) => {
-    const sql = `SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100`;
+    const sql = `SELECT * FROM logs ORDER BY timestamp DESC`;
     db.all(sql, [], (err, rows) => {
       if (err) {
         console.error('⚠️ [SQLite Select Error]:', err.message);
@@ -835,8 +835,9 @@ app.get('/api/admin/accounting', (req, res) => {
       const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
       filteredLogs = filteredLogs.filter(l => new Date(l.timestamp).getTime() >= thirtyDaysAgo);
     } else if (timeRange === 'daily') {
-      const oneDayAgo = now - 24 * 60 * 60 * 1000;
-      filteredLogs = filteredLogs.filter(l => new Date(l.timestamp).getTime() >= oneDayAgo);
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      filteredLogs = filteredLogs.filter(l => new Date(l.timestamp).getTime() >= startOfToday.getTime());
     }
 
     // Filter by Trader if specific trader selected
@@ -872,19 +873,20 @@ app.get('/api/admin/accounting', (req, res) => {
       const amt = parseFloat(log.amount) || 0;
       const prc = parseFloat(log.price) || 0;
       const prft = parseFloat(log.profit) || 0;
+      const itemTotalPrice = amt * prc;
 
       adminStats[trader].totalTrades += 1;
 
       if (log.type === 'BUY') {
         totalBuyAmount += amt;
-        totalBuyPrice += prc;
+        totalBuyPrice += itemTotalPrice;
         adminStats[trader].buyCount += 1;
         adminStats[trader].buyAmount += amt;
-        adminStats[trader].buyPrice += prc;
+        adminStats[trader].buyPrice += itemTotalPrice;
         adminStats[trader].currentStock += amt;
       } else if (log.type === 'SOLD') {
         totalSoldAmount += amt;
-        totalSoldPrice += prc;
+        totalSoldPrice += itemTotalPrice;
         totalProfit += prft;
         adminStats[trader].soldCount += 1;
         adminStats[trader].soldAmount += amt;
