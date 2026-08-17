@@ -261,6 +261,12 @@ function handleTraderFilterChange() {
   renderLogsTable();
 }
 
+// Handle Log Search Input Change
+function handleLogSearchInput() {
+  currentLogPage = 1;
+  renderLogsTable();
+}
+
 // Filter Logs By Specific Trader
 function filterLogsByTrader(traderName) {
   selectedTraderFilter = traderName;
@@ -526,16 +532,41 @@ function renderAdminBreakdown(breakdown, totalTradesCount) {
 function renderLogsTable() {
   const tbody = document.getElementById('logs-tbody');
   const badgeEl = document.getElementById('active-log-filter-badge');
+  const searchInput = document.getElementById('log-search-input');
+  const searchQuery = (searchInput?.value || '').trim().toLowerCase();
 
   if (!tbody) return;
 
-  const filteredLogs = selectedTraderFilter === 'ALL'
+  let filteredLogs = selectedTraderFilter === 'ALL'
     ? allLogs
     : allLogs.filter(l => (l.trader || '').trim().toLowerCase() === selectedTraderFilter.trim().toLowerCase());
 
+  if (searchQuery) {
+    filteredLogs = filteredLogs.filter(l => {
+      const isBuy = (l.type || 'BUY').toUpperCase() === 'BUY';
+      const dateFormatted = l.timestamp ? new Date(l.timestamp).toLocaleString('tr-TR') : '';
+      const trader = l.trader || 'Ulukan';
+      const type = l.type || 'BUY';
+      const amount = l.amount !== undefined ? String(l.amount) : '';
+      const price = l.price !== undefined ? String(l.price) : '';
+      const profit = l.profit !== undefined ? String(l.profit) : '';
+      const info = l.info || '';
+
+      const searchTarget = `${dateFormatted} ${l.timestamp || ''} ${trader} ${type} ${amount} ${price} ${profit} ${info}`.toLowerCase();
+      return searchTarget.includes(searchQuery);
+    });
+  }
+
   if (badgeEl) {
+    const filterParts = [];
     if (selectedTraderFilter !== 'ALL') {
-      badgeEl.textContent = `Filtre: ${selectedTraderFilter}`;
+      filterParts.push(`Personel: ${selectedTraderFilter}`);
+    }
+    if (searchQuery) {
+      filterParts.push(`Arama: "${searchQuery}"`);
+    }
+    if (filterParts.length > 0) {
+      badgeEl.textContent = `Filtre: ${filterParts.join(' | ')}`;
       badgeEl.classList.remove('hidden');
     } else {
       badgeEl.classList.add('hidden');

@@ -244,22 +244,32 @@ function updatePreview() {
   const price = document.getElementById('price').value || '0';
   const profit = document.getElementById('profit').value || '0';
   const trader = loggedUser || '[Seçilmedi]';
-  const info = document.getElementById('info').value.trim();
+  const rawInfo = document.getElementById('info').value.trim();
 
   const previewEl = document.getElementById('message-preview');
   if (!previewEl) return;
 
+  let infoText = rawInfo;
+  if (type === 'SOLD') {
+    const buyPriceVal = document.getElementById('buyPrice')?.value.trim();
+    const sellPriceVal = document.getElementById('sellPrice')?.value.trim();
+    if (buyPriceVal && sellPriceVal) {
+      const rangeTag = `(${buyPriceVal}-${sellPriceVal})`;
+      infoText = rawInfo ? `${rawInfo} ${rangeTag}` : rangeTag;
+    }
+  }
+
   let previewText = '';
   if (type === 'BUY') {
     previewText = `🔒 BUY: ${amount}bgl\n💥 PRICE: ${price}tl`;
-    if (info) {
-      previewText += `\nℹ️ INFO: ${info}`;
+    if (infoText) {
+      previewText += `\nℹ️ INFO: ${infoText}`;
     }
     previewText += `\n👤 ADMİN: ${trader}`;
   } else {
     previewText = `🔒 SOLD: ${amount}bgl\n💸 PROFİT: ${profit}tl`;
-    if (info) {
-      previewText += `\nℹ️ INFO: ${info}`;
+    if (infoText) {
+      previewText += `\nℹ️ INFO: ${infoText}`;
     }
     previewText += `\n👤 ADMİN: ${trader}`;
   }
@@ -410,10 +420,21 @@ async function handleSendLog(e) {
 
   const type = document.getElementById('trade-type').value;
   let priceVal = '';
+  const buyPriceVal = document.getElementById('buyPrice')?.value.trim() || '';
+  const sellPriceVal = document.getElementById('sellPrice')?.value.trim() || '';
+
   if (type === 'BUY') {
     priceVal = document.getElementById('price').value.trim();
   } else {
-    priceVal = document.getElementById('sellPrice').value.trim() || document.getElementById('price').value.trim();
+    priceVal = sellPriceVal || document.getElementById('price').value.trim();
+  }
+
+  let effectiveInfo = document.getElementById('info').value.trim();
+  if (type === 'SOLD' && buyPriceVal !== '' && sellPriceVal !== '') {
+    const rangeTag = `(${buyPriceVal}-${sellPriceVal})`;
+    if (!effectiveInfo.includes(rangeTag)) {
+      effectiveInfo = effectiveInfo ? `${effectiveInfo} ${rangeTag}` : rangeTag;
+    }
   }
 
   const payload = {
@@ -421,8 +442,10 @@ async function handleSendLog(e) {
     type,
     amount: document.getElementById('amount').value.trim(),
     price: priceVal,
+    buyPrice: buyPriceVal,
+    sellPrice: sellPriceVal,
     profit: document.getElementById('profit')?.value.trim() || '',
-    info: document.getElementById('info').value.trim()
+    info: effectiveInfo
   };
 
   btnSubmit.disabled = true;

@@ -289,6 +289,7 @@
               <span id="active-log-filter-badge" class="badge badge-info hidden"></span>
             </div>
             <div style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
+              <input type="text" id="log-search-input" placeholder="🔍 Loglarda Ara (Tarih, Saat, Personel, Miktar, Not...)" oninput="handleLogSearchInput()" style="padding: 0.45rem 0.8rem; min-width: 260px; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--card-border); border-radius: var(--radius-sm); outline: none;" />
               <select id="log-filter-trader" onchange="handleTraderFilterChange()" style="padding: 0.45rem 0.8rem; background: var(--input-bg); color: var(--text-main); border: 1px solid var(--card-border); border-radius: var(--radius-sm); outline: none; cursor: pointer;">
                 <option value="ALL">👥 Tüm Personeller (Tümü)</option>
               </select>

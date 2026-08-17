@@ -430,10 +430,17 @@ async function startBaileys() {
 startBaileys();
 
 // Helper: Format BGL Trade Log message for WhatsApp
-function formatTradeLogMessage({ type, amount, price, profit, info, trader }) {
+function formatTradeLogMessage({ type, amount, price, profit, info, trader, buyPrice, sellPrice }) {
   const isBuy = String(type || 'BUY').toUpperCase() === 'BUY';
-  const infoText = (info && String(info).trim()) ? String(info).trim() : '';
+  let infoText = (info && String(info).trim()) ? String(info).trim() : '';
   const adminText = (trader && String(trader).trim()) ? String(trader).trim() : 'Ulukan';
+
+  if (!isBuy && buyPrice !== undefined && sellPrice !== undefined && String(buyPrice).trim() !== '' && String(sellPrice).trim() !== '') {
+    const rangeTag = `(${String(buyPrice).trim()}-${String(sellPrice).trim()})`;
+    if (!infoText.includes(rangeTag)) {
+      infoText = infoText ? `${infoText} ${rangeTag}` : rangeTag;
+    }
+  }
 
   if (isBuy) {
     let msg = `🔒 BUY: ${amount || 0}bgl\n💥 PRICE: ${price || 0}tl`;
@@ -505,7 +512,7 @@ app.get('/api/users', (req, res) => {
 // 4. Send BGL Trade Log via WhatsApp
 app.post('/api/send-log', async (req, res) => {
   try {
-    const { type = 'BUY', amount, price, profit, info, trader, message } = req.body;
+    const { type = 'BUY', amount, price, profit, info, trader, buyPrice, sellPrice, message } = req.body;
 
     if (!trader || String(trader).trim() === '') {
       return res.status(400).json({
@@ -521,12 +528,20 @@ app.post('/api/send-log', async (req, res) => {
       });
     }
 
+    let effectiveInfo = info ? String(info).trim() : '';
+    if (String(type).toUpperCase() === 'SOLD' && buyPrice !== undefined && sellPrice !== undefined && String(buyPrice).trim() !== '' && String(sellPrice).trim() !== '') {
+      const rangeTag = `(${String(buyPrice).trim()}-${String(sellPrice).trim()})`;
+      if (!effectiveInfo.includes(rangeTag)) {
+        effectiveInfo = effectiveInfo ? `${effectiveInfo} ${rangeTag}` : rangeTag;
+      }
+    }
+
     // Build trade log formatted message (or use raw message if provided)
     let formattedText = '';
     if (message) {
       formattedText = message;
     } else {
-      formattedText = formatTradeLogMessage({ type, amount, price, profit, info, trader });
+      formattedText = formatTradeLogMessage({ type, amount, price, profit, info: effectiveInfo, trader, buyPrice, sellPrice });
     }
 
     // Ensure target JID format
@@ -549,7 +564,7 @@ app.post('/api/send-log', async (req, res) => {
       amount,
       price,
       profit: type === 'SOLD' ? profit : undefined,
-      info: info || '',
+      info: effectiveInfo || '',
       formattedText,
       status: 'SENT',
       messageId
