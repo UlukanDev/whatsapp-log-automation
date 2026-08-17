@@ -318,8 +318,9 @@ function renderPerformanceChart(logs) {
   let filtered = logs || [];
 
   if (chartTimeframeFilter === 'daily') {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const trDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+    const startOfToday = new Date(trDateStr + 'T00:00:00+03:00');
     filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= startOfToday.getTime());
   } else if (chartTimeframeFilter === 'weekly') {
     const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;

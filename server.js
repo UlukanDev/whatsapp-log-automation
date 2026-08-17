@@ -821,24 +821,33 @@ app.get('/api/admin/accounting', (req, res) => {
 
   const { timeRange, trader: traderFilter } = req.query;
 
-  db.all(`SELECT * FROM logs ORDER BY timestamp DESC`, [], (err, logs) => {
+  // Türkiye saatiyle bugünün 00:00:00 anı (Europe/Istanbul / UTC+3 karşılığı: 21:00:00 UTC)
+  const now = new Date();
+  const trDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+  const startOfDayTurkey = new Date(trDateStr + 'T00:00:00+03:00');
+
+  let sql = `SELECT * FROM logs`;
+  const queryParams = [];
+
+  if (timeRange === 'daily') {
+    sql += ` WHERE timestamp >= ?`;
+    queryParams.push(startOfDayTurkey.toISOString());
+  } else if (timeRange === 'weekly') {
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    sql += ` WHERE timestamp >= ?`;
+    queryParams.push(sevenDaysAgo.toISOString());
+  } else if (timeRange === 'monthly') {
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    sql += ` WHERE timestamp >= ?`;
+    queryParams.push(thirtyDaysAgo.toISOString());
+  }
+
+  sql += ` ORDER BY timestamp DESC`;
+
+  db.all(sql, queryParams, (err, logs) => {
     if (err) return res.status(500).json({ success: false, error: err.message });
 
-    const now = Date.now();
     let filteredLogs = logs;
-
-    // Filter by Time Range
-    if (timeRange === 'weekly') {
-      const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-      filteredLogs = filteredLogs.filter(l => new Date(l.timestamp).getTime() >= sevenDaysAgo);
-    } else if (timeRange === 'monthly') {
-      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-      filteredLogs = filteredLogs.filter(l => new Date(l.timestamp).getTime() >= thirtyDaysAgo);
-    } else if (timeRange === 'daily') {
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-      filteredLogs = filteredLogs.filter(l => new Date(l.timestamp).getTime() >= startOfToday.getTime());
-    }
 
     // Filter by Trader if specific trader selected
     if (traderFilter && traderFilter !== 'ALL') {
