@@ -1,0 +1,9 @@
+2026/08/05-17:47:15.523 2f0c Reusing MANIFEST C:\Users\beyca\OneDrive\Desktop\bayramresellLog\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
+2026/08/05-17:47:15.531 2f0c Recovering log #4
+2026/08/05-17:47:15.539 2f0c Reusing old log C:\Users\beyca\OneDrive\Desktop\bayramresellLog\.wwebjs_auth\session\Default\Local Storage\leveldb/000004.log 
+2026/08/05-17:48:15.554 3cd4 Level-0 table #7: started
+2026/08/05-17:48:15.563 3cd4 Level-0 table #7: 14470 bytes OK
+2026/08/05-17:48:15.565 3cd4 Delete type=0 #4
+2026/08/05-18:53:01.803 3cd4 Level-0 table #9: started
+2026/08/05-18:53:01.813 3cd4 Level-0 table #9: 16103 bytes OK
+2026/08/05-18:53:01.816 3cd4 Delete type=0 #6
