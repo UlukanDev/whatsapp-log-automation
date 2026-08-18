@@ -145,6 +145,64 @@ function handleBreakdownFilterChange() {
   fetchBreakdownTableData();
 }
 
+// Helper: Filter logs by timeframe (daily, weekly, monthly, all)
+function filterLogsByTimeframe(logs, timeframe) {
+  const now = Date.now();
+  let filtered = logs || [];
+
+  if (timeframe === 'daily') {
+    const nowDate = new Date();
+    const trDateStr = nowDate.toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+    const startOfToday = new Date(trDateStr + 'T00:00:00+03:00');
+    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= startOfToday.getTime());
+  } else if (timeframe === 'weekly') {
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= sevenDaysAgo);
+  } else if (timeframe === 'monthly') {
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= thirtyDaysAgo);
+  }
+
+  return filtered;
+}
+
+// Update Top Summary Cards based on current chart timeframe filter
+function updateTopSummaryByTimeframe(logs) {
+  const filtered = filterLogsByTimeframe(logs, chartTimeframeFilter);
+
+  let totalBuyAmount = 0;
+  let totalBuyPrice = 0;
+  let totalSoldAmount = 0;
+  let totalSoldPrice = 0;
+  let totalProfit = 0;
+  let totalTrades = filtered.length;
+
+  filtered.forEach(log => {
+    const amt = parseFloat(log.amount) || 0;
+    const prc = parseFloat(log.price) || 0;
+    const prft = parseFloat(log.profit) || 0;
+    const itemTotalPrice = amt * prc;
+
+    if ((log.type || '').toUpperCase() === 'BUY') {
+      totalBuyAmount += amt;
+      totalBuyPrice += itemTotalPrice;
+    } else if ((log.type || '').toUpperCase() === 'SOLD') {
+      totalSoldAmount += amt;
+      totalSoldPrice += itemTotalPrice;
+      totalProfit += prft;
+    }
+  });
+
+  renderAccountingSummary({
+    totalTrades,
+    totalBuyAmount,
+    totalBuyPrice,
+    totalSoldAmount,
+    totalSoldPrice,
+    totalProfit
+  });
+}
+
 // Set Chart Timeframe (Daily / Weekly / Monthly / All)
 function setChartTimeframe(tf) {
   chartTimeframeFilter = tf;
@@ -171,6 +229,7 @@ function setChartTimeframe(tf) {
   });
 
   renderPerformanceChart(allLogs);
+  updateTopSummaryByTimeframe(allLogs);
 }
 
 // Fetch Accounting Data & Logs History from Backend API
@@ -184,37 +243,25 @@ async function fetchAccountingData() {
     const dateVal = document.getElementById('breakdown-filter-date')?.value || breakdownDateFilter || 'all';
     const traderVal = document.getElementById('breakdown-filter-trader')?.value || breakdownTraderFilter || 'ALL';
 
-    const [overallRes, breakdownRes, logsRes] = await Promise.all([
-      // 1. Overall Summary for Top 3 Cards (Always timeRange=all & trader=ALL)
-      fetch('/api/admin/accounting?timeRange=all&trader=ALL', {
-        headers: { 'Authorization': `Bearer ${adminToken}` }
-      }).catch(e => ({ ok: false, status: 500 })),
-
-      // 2. Personel Breakdown Table Data (Filtered by breakdown date & trader)
+    const [breakdownRes, logsRes] = await Promise.all([
+      // 1. Personel Breakdown Table Data (Filtered by breakdown date & trader)
       fetch(`/api/admin/accounting?timeRange=${encodeURIComponent(dateVal)}&trader=${encodeURIComponent(traderVal)}`, {
         headers: { 'Authorization': `Bearer ${adminToken}` }
       }).catch(e => ({ ok: false, status: 500 })),
 
-      // 3. All Logs History
+      // 2. All Logs History
       fetch('/api/logs').catch(e => ({ ok: false, status: 500 }))
     ]);
 
-    if (overallRes.status === 401 || overallRes.status === 403 || breakdownRes.status === 401 || breakdownRes.status === 403) {
+    if (breakdownRes.status === 401 || breakdownRes.status === 403) {
       sessionStorage.removeItem('admin_token');
       adminToken = null;
       document.getElementById('admin-login-modal')?.classList.remove('hidden');
       return;
     }
 
-    const overallData = overallRes.ok ? await overallRes.json().catch(() => null) : null;
     const breakdownData = breakdownRes.ok ? await breakdownRes.json().catch(() => null) : null;
     const logsData = logsRes.ok ? await logsRes.json().catch(() => null) : null;
-
-    if (overallData && overallData.success) {
-      renderAccountingSummary(overallData.summary);
-    } else {
-      renderAccountingSummary({ totalBuyAmount: 0, totalBuyPrice: 0, totalSoldAmount: 0, totalSoldPrice: 0, totalProfit: 0, totalTrades: 0 });
-    }
 
     if (breakdownData && breakdownData.success) {
       renderAdminBreakdown(breakdownData.adminBreakdown, breakdownData.summary.totalTrades);
@@ -228,10 +275,12 @@ async function fetchAccountingData() {
       populateBreakdownTraderDropdown(allLogs);
       renderLogsTable();
       renderPerformanceChart(allLogs);
+      updateTopSummaryByTimeframe(allLogs);
     } else {
       allLogs = [];
       renderLogsTable();
       renderPerformanceChart([]);
+      updateTopSummaryByTimeframe([]);
     }
   } catch (err) {
     console.error('Accounting data fetch error:', err);
@@ -239,6 +288,7 @@ async function fetchAccountingData() {
     renderAdminBreakdown([], 0);
     renderLogsTable();
     renderPerformanceChart([]);
+    updateTopSummaryByTimeframe([]);
   }
 }
 
@@ -361,21 +411,7 @@ function renderPerformanceChart(logs) {
   const ctx = canvas.getContext('2d');
 
   // Filter logs by selected chart timeframe
-  const now = Date.now();
-  let filtered = logs || [];
-
-  if (chartTimeframeFilter === 'daily') {
-    const now = new Date();
-    const trDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
-    const startOfToday = new Date(trDateStr + 'T00:00:00+03:00');
-    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= startOfToday.getTime());
-  } else if (chartTimeframeFilter === 'weekly') {
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= sevenDaysAgo);
-  } else if (chartTimeframeFilter === 'monthly') {
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-    filtered = filtered.filter(l => new Date(l.timestamp).getTime() >= thirtyDaysAgo);
-  }
+  const filtered = filterLogsByTimeframe(logs, chartTimeframeFilter);
 
   // Aggregate stats per trader
   const statsByTrader = {};
