@@ -106,15 +106,43 @@ function switchTab(tabName) {
   }
 }
 
-// Handle Breakdown Filter Changes (Date or Personnel)
-function handleBreakdownFilterChange() {
+// Fetch Breakdown Table Data Only (Triggered by breakdown date/trader dropdowns or breakdown refresh button)
+async function fetchBreakdownTableData() {
+  if (!adminToken) return;
+
   const dateEl = document.getElementById('breakdown-filter-date');
   const traderEl = document.getElementById('breakdown-filter-trader');
 
   if (dateEl) breakdownDateFilter = dateEl.value;
   if (traderEl) breakdownTraderFilter = traderEl.value;
 
-  fetchAccountingData();
+  try {
+    const res = await fetch(`/api/admin/accounting?timeRange=${encodeURIComponent(breakdownDateFilter)}&trader=${encodeURIComponent(breakdownTraderFilter)}`, {
+      headers: { 'Authorization': `Bearer ${adminToken}` }
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      sessionStorage.removeItem('admin_token');
+      adminToken = null;
+      document.getElementById('admin-login-modal')?.classList.remove('hidden');
+      return;
+    }
+
+    const data = await res.json().catch(() => null);
+    if (data && data.success) {
+      renderAdminBreakdown(data.adminBreakdown, data.summary.totalTrades);
+    } else {
+      renderAdminBreakdown([], 0);
+    }
+  } catch (err) {
+    console.error('Breakdown table fetch error:', err);
+    renderAdminBreakdown([], 0);
+  }
+}
+
+// Handle Breakdown Filter Changes (Date or Personnel)
+function handleBreakdownFilterChange() {
+  fetchBreakdownTableData();
 }
 
 // Set Chart Timeframe (Daily / Weekly / Monthly / All)
@@ -156,28 +184,41 @@ async function fetchAccountingData() {
     const dateVal = document.getElementById('breakdown-filter-date')?.value || breakdownDateFilter || 'all';
     const traderVal = document.getElementById('breakdown-filter-trader')?.value || breakdownTraderFilter || 'ALL';
 
-    const [accRes, logsRes] = await Promise.all([
+    const [overallRes, breakdownRes, logsRes] = await Promise.all([
+      // 1. Overall Summary for Top 3 Cards (Always timeRange=all & trader=ALL)
+      fetch('/api/admin/accounting?timeRange=all&trader=ALL', {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      }).catch(e => ({ ok: false, status: 500 })),
+
+      // 2. Personel Breakdown Table Data (Filtered by breakdown date & trader)
       fetch(`/api/admin/accounting?timeRange=${encodeURIComponent(dateVal)}&trader=${encodeURIComponent(traderVal)}`, {
         headers: { 'Authorization': `Bearer ${adminToken}` }
       }).catch(e => ({ ok: false, status: 500 })),
+
+      // 3. All Logs History
       fetch('/api/logs').catch(e => ({ ok: false, status: 500 }))
     ]);
 
-    if (accRes.status === 401 || accRes.status === 403) {
+    if (overallRes.status === 401 || overallRes.status === 403 || breakdownRes.status === 401 || breakdownRes.status === 403) {
       sessionStorage.removeItem('admin_token');
       adminToken = null;
       document.getElementById('admin-login-modal')?.classList.remove('hidden');
       return;
     }
 
-    const accData = accRes.ok ? await accRes.json().catch(() => null) : null;
+    const overallData = overallRes.ok ? await overallRes.json().catch(() => null) : null;
+    const breakdownData = breakdownRes.ok ? await breakdownRes.json().catch(() => null) : null;
     const logsData = logsRes.ok ? await logsRes.json().catch(() => null) : null;
 
-    if (accData && accData.success) {
-      renderAccountingSummary(accData.summary);
-      renderAdminBreakdown(accData.adminBreakdown, accData.summary.totalTrades);
+    if (overallData && overallData.success) {
+      renderAccountingSummary(overallData.summary);
     } else {
       renderAccountingSummary({ totalBuyAmount: 0, totalBuyPrice: 0, totalSoldAmount: 0, totalSoldPrice: 0, totalProfit: 0, totalTrades: 0 });
+    }
+
+    if (breakdownData && breakdownData.success) {
+      renderAdminBreakdown(breakdownData.adminBreakdown, breakdownData.summary.totalTrades);
+    } else {
       renderAdminBreakdown([], 0);
     }
 
